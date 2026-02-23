@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  --<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -8,33 +8,1370 @@
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  /* The "Deep Green" is now a sleek, dark Slate for high-contrast headers */
-  --green-deep: #1E293B; 
-  /* The "Main Green" is now a sharp, professional Teal for buttons & progress */
-  --green-main: #0D9488; 
-  /* The "Light Green" is now a very soft, icy Teal for active backgrounds */
-  --green-light: #F0FDFA; 
-  /* The "Glow Green" is a vibrant Teal accent */
-  --green-glow: #14B8A6; 
-
-  /* Keeping your warning/emergency colors exactly the same */
+  --green-deep: #1E293B;
+  --green-main: #0D9488;
+  --green-light: #F0FDFA;
+  --green-glow: #14B8A6;
   --orange-accent: #F5A623;
   --orange-light: #FFF4E0;
   --red-soft: #E74C3C;
   --red-light: #FDEAEA;
-
-  /* Clean, minimalist backgrounds */
-  --bg: #F3F4F6; /* A cool, paper-like off-white */
+  --bg: #F3F4F6;
   --card-bg: #FFFFFF;
-
-  /* High-contrast typography */
-  --text-primary: #111827; /* Stark near-black for English (Max readability) */
-  --text-secondary: #4B5563; /* Slate gray for Arabic translations */
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
   --text-muted: #9CA3AF;
-
-  /* Neutral, crisp borders and floating shadows */
   --border: #E5E7EB;
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ====== TOP NAV ====== */
+.top-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: var(--green-deep);
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+.top-nav .back-btn {
+  background: rgba(255,255,255,0.15); border: none; color: #fff;
+  width: 36px; height: 36px; border-radius: 10px;
+  display: none; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 18px; flex-shrink: 0;
+  transition: background 0.2s;
+}
+.top-nav .back-btn:hover { background: rgba(255,255,255,0.25); }
+.top-nav .back-btn.visible { display: flex; }
+.top-nav .title-area { flex: 1; }
+.top-nav h1 {
+  font-family: 'Cairo', sans-serif;
+  font-size: 17px; font-weight: 700; color: #fff; line-height: 1.2;
+}
+.top-nav .subtitle {
+  font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 400;
+}
+.nav-icon-btn {
+  background: rgba(255,255,255,0.15); border: none; color: #fff;
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px; transition: background 0.2s;
+}
+.nav-icon-btn:hover { background: rgba(255,255,255,0.25); }
+
+/* ====== MAIN CONTAINER ====== */
+.main { padding-top: 68px; padding-bottom: 80px; }
+
+/* ====== HOME SCREEN ====== */
+.home-screen { padding: 16px; }
+
+.hero-card {
+  background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-main) 60%, var(--green-glow) 100%);
+  border-radius: var(--radius-xl); padding: 28px 22px;
+  color: #fff; position: relative; overflow: hidden;
+  margin-bottom: 20px;
+}
+.hero-card::before {
+  content: ''; position: absolute; top: -40px; right: -40px;
+  width: 140px; height: 140px; border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+}
+.hero-card::after {
+  content: ''; position: absolute; bottom: -30px; left: 20%;
+  width: 100px; height: 100px; border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+}
+.hero-greeting {
+  font-family: 'Cairo', sans-serif;
+  font-size: 22px; font-weight: 800; margin-bottom: 4px;
+}
+.hero-sub { font-size: 14px; opacity: 0.85; margin-bottom: 20px; line-height: 1.5; }
+.hero-stats {
+  display: flex; gap: 16px;
+}
+.hero-stat {
+  background: rgba(255,255,255,0.15); border-radius: var(--radius-sm);
+  padding: 10px 14px; flex: 1; text-align: center;
+  backdrop-filter: blur(4px);
+}
+.hero-stat .num {
+  font-family: 'Cairo', sans-serif;
+  font-size: 22px; font-weight: 800; display: block;
+}
+.hero-stat .label { font-size: 11px; opacity: 0.8; }
+
+/* Emergency Button */
+.emergency-btn {
+  width: 100%; padding: 16px;
+  background: var(--red-soft); color: #fff;
+  border: none; border-radius: var(--radius-lg);
+  font-family: 'Cairo', sans-serif;
+  font-size: 16px; font-weight: 700;
+  cursor: pointer; margin-bottom: 20px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  box-shadow: 0 4px 16px rgba(231,76,60,0.25);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.emergency-btn:active { transform: scale(0.97); }
+.emergency-btn .icon { font-size: 22px; }
+
+/* Emergency Panel */
+.emergency-panel {
+  display: none; background: #fff; border-radius: var(--radius-lg);
+  padding: 16px; margin-bottom: 20px;
+  border: 2px solid var(--red-soft);
+  box-shadow: var(--shadow-lg);
+}
+.emergency-panel.open { display: block; animation: slideDown 0.3s ease; }
+.emergency-panel h3 {
+  font-family: 'Cairo', sans-serif;
+  color: var(--red-soft); margin-bottom: 12px; font-size: 15px;
+}
+.emergency-phrase {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--red-light); margin-bottom: 6px;
+  cursor: pointer; transition: background 0.15s;
+}
+.emergency-phrase:hover { background: #fcd5d5; }
+.emergency-phrase:active { background: #f9c0c0; }
+.emergency-phrase .play-icon {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--red-soft); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; flex-shrink: 0;
+}
+.emergency-phrase .eng { font-size: 14px; font-weight: 600; flex: 1; }
+.emergency-phrase .arb {
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px; color: var(--text-secondary); direction: rtl;
+}
+
+/* Section Headers */
+.section-header {
+  font-family: 'Cairo', sans-serif;
+  font-size: 17px; font-weight: 700; color: var(--text-primary);
+  margin-bottom: 12px; margin-top: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-header .emoji { font-size: 20px; }
+
+/* Quick Actions */
+.quick-actions { display: flex; gap: 10px; margin-bottom: 24px; }
+.quick-action {
+  flex: 1; padding: 16px 12px;
+  background: #fff; border: 1.5px solid var(--border);
+  border-radius: var(--radius-md); text-align: center;
+  cursor: pointer; transition: all 0.2s;
+}
+.quick-action:hover { border-color: var(--green-main); background: var(--green-light); }
+.quick-action:active { transform: scale(0.97); }
+.quick-action .qa-icon { font-size: 26px; margin-bottom: 6px; }
+.quick-action .qa-label {
+  font-size: 12px; font-weight: 600; color: var(--text-primary);
+}
+.quick-action .qa-desc {
+  font-size: 10px; color: var(--text-muted); margin-top: 2px;
+}
+
+/* Module Cards */
+.module-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+.module-card {
+  background: #fff; border-radius: var(--radius-md);
+  padding: 16px; cursor: pointer;
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; gap: 14px;
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+.module-card:hover { border-color: var(--green-main); box-shadow: var(--shadow-md); }
+.module-card:active { transform: scale(0.98); }
+.module-card .mc-icon {
+  width: 48px; height: 48px; border-radius: var(--radius-sm);
+  background: var(--green-light); color: var(--green-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.module-card .mc-info { flex: 1; }
+.module-card .mc-title {
+  font-family: 'Cairo', sans-serif;
+  font-size: 15px; font-weight: 700; margin-bottom: 2px;
+}
+.module-card .mc-count { font-size: 12px; color: var(--text-muted); }
+.module-card .mc-arrow { color: var(--text-muted); font-size: 18px; }
+.module-card .mc-progress {
+  height: 3px; background: var(--border); border-radius: 2px;
+  margin-top: 6px; overflow: hidden;
+}
+.module-card .mc-progress-fill {
+  height: 100%; background: var(--green-main); border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* ====== MODULE VIEW ====== */
+.module-view { padding: 16px; display: none; }
+.module-view.active { display: block; }
+
+.module-header {
+  background: linear-gradient(135deg, var(--green-deep), var(--green-main));
+  border-radius: var(--radius-lg); padding: 20px;
+  color: #fff; margin-bottom: 16px;
+}
+.module-header h2 {
+  font-family: 'Cairo', sans-serif;
+  font-size: 20px; font-weight: 800;
+}
+.module-header .mh-count { font-size: 13px; opacity: 0.8; margin-top: 2px; }
+
+/* Watch Out Banner */
+.watch-out-banner {
+  background: var(--orange-light); border: 1.5px solid var(--orange-accent);
+  border-radius: var(--radius-md); padding: 14px;
+  margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;
+  direction: rtl;
+}
+.watch-out-banner .wo-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+.watch-out-banner .wo-text {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px; line-height: 1.7; color: #7A5A00;
+}
+.watch-out-banner .wo-text strong { color: #5A3F00; }
+
+/* Interaction Card */
+.interaction-card {
+  background: #fff; border-radius: var(--radius-md);
+  margin-bottom: 10px; overflow: hidden;
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s;
+}
+.interaction-card.expanded { border-color: var(--green-main); }
+.ic-top {
+  padding: 14px 16px; cursor: pointer;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.ic-num {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--green-light); color: var(--green-deep);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+  flex-shrink: 0; margin-top: 1px;
+}
+.ic-content { flex: 1; }
+.ic-customer-label {
+  font-family: 'Cairo', sans-serif;
+  font-size: 10px; font-weight: 600; color: var(--text-muted);
+  letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.ic-english { font-size: 15px; font-weight: 600; line-height: 1.4; color: var(--text-primary); }
+.ic-expand-icon {
+  color: var(--text-muted); font-size: 14px; flex-shrink: 0; margin-top: 4px;
+  transition: transform 0.2s;
+}
+.interaction-card.expanded .ic-expand-icon { transform: rotate(180deg); }
+
+.ic-details {
+  display: none; padding: 0 16px 14px 56px;
+}
+.interaction-card.expanded .ic-details { display: block; animation: fadeIn 0.2s ease; }
+
+.ic-arabic {
+  font-family: 'Cairo', sans-serif;
+  font-size: 14px; color: var(--text-secondary);
+  direction: rtl; text-align: right;
+  background: var(--bg); padding: 8px 12px; border-radius: 8px;
+  margin-bottom: 10px;
+}
+.ic-divider {
+  height: 1px; background: var(--border); margin: 10px 0;
+}
+.ic-cashier-label {
+  font-family: 'Cairo', sans-serif;
+  font-size: 10px; font-weight: 600; color: var(--green-main);
+  letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.ic-cashier-eng { font-size: 15px; font-weight: 600; color: var(--green-deep); margin-bottom: 4px; }
+.ic-cashier-arb {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px; color: var(--text-secondary);
+  direction: rtl; text-align: right;
+  background: var(--green-light); padding: 8px 12px; border-radius: 8px;
+}
+.ic-audio-row {
+  display: flex; gap: 8px; margin-top: 10px;
+}
+.audio-btn {
+  padding: 7px 14px; border-radius: 20px;
+  border: 1.5px solid var(--green-main); background: #fff;
+  color: var(--green-deep); font-family: 'Cairo', sans-serif;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 5px;
+  transition: all 0.15s;
+}
+.audio-btn:hover { background: var(--green-light); }
+.audio-btn:active { transform: scale(0.95); }
+.audio-btn.playing { background: var(--green-main); color: #fff; }
+
+/* Mastery Buttons */
+.ic-mastery-row {
+  display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+}
+.mastery-btn {
+  padding: 5px 12px; border-radius: 16px;
+  border: 1.5px solid var(--border); background: #fff;
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  color: var(--text-secondary); transition: all 0.15s;
+}
+.mastery-btn:hover { border-color: var(--green-main); }
+.mastery-btn.active-new { border-color: var(--text-muted); background: #f0f0f0; color: var(--text-primary); }
+.mastery-btn.active-learning { border-color: var(--orange-accent); background: var(--orange-light); color: #7A5A00; }
+.mastery-btn.active-confident { border-color: var(--green-main); background: var(--green-light); color: var(--green-deep); }
+.mastery-btn.active-automatic { border-color: var(--green-glow); background: var(--green-deep); color: #fff; }
+
+/* ====== ROLEPLAY VIEW ====== */
+.roleplay-view { padding: 16px; display: none; }
+.roleplay-view.active { display: block; }
+
+.roleplay-list { display: flex; flex-direction: column; gap: 10px; }
+.roleplay-item {
+  background: #fff; border-radius: var(--radius-md);
+  border: 1.5px solid var(--border); overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.rp-header {
+  padding: 14px 16px; cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+}
+.rp-num {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--green-deep), var(--green-main));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500;
+  flex-shrink: 0;
+}
+.rp-title { font-size: 14px; font-weight: 600; flex: 1; }
+.rp-arrow { color: var(--text-muted); font-size: 14px; transition: transform 0.2s; }
+.roleplay-item.expanded .rp-arrow { transform: rotate(180deg); }
+
+.rp-body { display: none; padding: 0 16px 16px; }
+.roleplay-item.expanded .rp-body { display: block; animation: fadeIn 0.2s ease; }
+
+.rp-line {
+  display: flex; gap: 10px; margin-bottom: 8px;
+  align-items: flex-start;
+}
+.rp-speaker {
+  font-family: 'Cairo', sans-serif;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.5px; padding: 3px 8px; border-radius: 6px;
+  flex-shrink: 0; margin-top: 2px;
+}
+.rp-speaker.customer { background: #EDE7F6; color: #5E35B1; }
+.rp-speaker.cashier { background: var(--green-light); color: var(--green-deep); }
+.rp-text { flex: 1; }
+.rp-eng { font-size: 14px; font-weight: 500; }
+.rp-arb {
+  font-family: 'Cairo', sans-serif;
+  font-size: 12px; color: var(--text-secondary);
+  direction: rtl;
+}
+.rp-play-all {
+  margin-top: 10px; padding: 10px 18px;
+  background: var(--green-main); color: #fff; border: none;
+  border-radius: var(--radius-sm); font-family: 'Cairo', sans-serif;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  transition: all 0.15s;
+}
+.rp-play-all:hover { background: var(--green-deep); }
+
+/* ====== NUMBERS DRILL VIEW ====== */
+.drill-view { padding: 16px; display: none; }
+.drill-view.active { display: block; }
+
+.drill-card {
+  background: #fff; border-radius: var(--radius-lg);
+  padding: 32px 24px; text-align: center;
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow-md); margin-bottom: 16px;
+}
+.drill-price {
+  font-family: 'DM Mono', monospace;
+  font-size: 48px; font-weight: 500; color: var(--green-deep);
+  margin-bottom: 8px;
+}
+.drill-unit { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+.drill-answer {
+  font-size: 18px; font-weight: 600; color: var(--text-primary);
+  background: var(--green-light); padding: 14px 20px;
+  border-radius: var(--radius-sm); margin-bottom: 8px;
+  display: none; line-height: 1.5;
+}
+.drill-answer.visible { display: block; animation: fadeIn 0.2s; }
+.drill-answer-arb {
+  font-family: 'Cairo', sans-serif;
+  font-size: 15px; color: var(--text-secondary);
+  direction: rtl; display: none;
+  padding: 10px 20px; background: var(--bg);
+  border-radius: var(--radius-sm);
+}
+.drill-answer-arb.visible { display: block; animation: fadeIn 0.2s; }
+
+.drill-controls {
+  display: flex; gap: 10px; justify-content: center; margin-top: 16px;
+}
+.drill-btn {
+  padding: 12px 24px; border-radius: var(--radius-sm);
+  border: none; font-family: 'Cairo', sans-serif;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.drill-btn.primary { background: var(--green-main); color: #fff; }
+.drill-btn.primary:hover { background: var(--green-deep); }
+.drill-btn.secondary { background: var(--bg); color: var(--text-primary); border: 1.5px solid var(--border); }
+.drill-btn.secondary:hover { border-color: var(--green-main); }
+.drill-btn:active { transform: scale(0.95); }
+
+.drill-progress {
+  text-align: center; font-size: 13px; color: var(--text-muted);
+  margin-bottom: 16px; font-weight: 500;
+}
+
+/* ====== FALSE FRIENDS VIEW ====== */
+.ff-view { padding: 16px; display: none; }
+.ff-view.active { display: block; }
+
+.ff-card {
+  background: #fff; border-radius: var(--radius-md);
+  padding: 16px; margin-bottom: 10px;
+  border: 1.5px solid var(--orange-accent);
+  box-shadow: var(--shadow-sm);
+}
+.ff-pair { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.ff-word {
+  font-size: 16px; font-weight: 700; padding: 6px 14px;
+  border-radius: 8px; background: var(--orange-light); color: #7A5A00;
+}
+.ff-vs { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.ff-meaning {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.7; direction: rtl; text-align: right;
+}
+
+/* ====== BOTTOM NAV ====== */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #fff; border-top: 1px solid var(--border);
+  display: flex; z-index: 100;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.05);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.bottom-nav button {
+  flex: 1; padding: 8px 4px 10px; border: none; background: none;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer; color: var(--text-muted);
+  font-family: 'Cairo', sans-serif;
+  font-size: 10px; font-weight: 600;
+  transition: color 0.2s;
+}
+.bottom-nav button .bnav-icon { font-size: 20px; }
+.bottom-nav button.active { color: var(--green-deep); }
+
+/* ====== ANIMATIONS ====== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== SEARCH ====== */
+.search-bar {
+  position: relative; margin-bottom: 16px;
+}
+.search-bar input {
+  width: 100%; padding: 12px 16px 12px 42px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-md);
+  background: #fff; font-size: 14px; font-family: 'DM Sans', sans-serif;
+  color: var(--text-primary); outline: none;
+  transition: border-color 0.2s;
+}
+.search-bar input:focus { border-color: var(--green-main); }
+.search-bar input::placeholder { color: var(--text-muted); }
+.search-bar .search-icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); font-size: 16px;
+}
+
+/* ====== TRANSLATION TOGGLE ====== */
+.translation-hidden .ic-arabic,
+.translation-hidden .ic-cashier-arb,
+.translation-hidden .rp-arb,
+.translation-hidden .emergency-phrase .arb,
+.translation-hidden .drill-answer-arb { display: none !important; }
+
+/* ====== RESPONSIVE ====== */
+@media (min-width: 600px) {
+  .main { max-width: 500px; margin: 0 auto; }
+  .bottom-nav { max-width: 500px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="top-nav">
+  <button class="back-btn" id="backBtn" onclick="goBack()">←</button>
+  <div class="title-area">
+    <h1 id="navTitle">Cashier English <span style="font-size:13px;opacity:0.8;font-weight:400">إنجليزي الكاشير</span></h1>
+    <div class="subtitle" id="navSubtitle">Your daily register companion · رفيقك اليومي عند الكاشير</div>
+  </div>
+  <button class="nav-icon-btn" onclick="toggleArabic()" title="إظهار/إخفاء الترجمة">ع</button>
+</nav>
+
+<!-- MAIN -->
+<div class="main" id="mainContent">
+
+  <!-- HOME SCREEN -->
+  <div class="home-screen" id="homeScreen">
+    <div class="hero-card">
+      <div class="hero-greeting">مرحبًا! Welcome</div>
+      <div class="hero-sub">Master the English you need at the register.<br><span style="font-family:'Cairo',sans-serif;font-size:13px">أتقن الإنجليزية التي تحتاجها عند الكاشير</span></div>
+      <div class="hero-stats">
+        <div class="hero-stat" style="flex:none;padding:12px 28px">
+          <span class="num" id="statLearned">0</span>
+          <span class="label">ما تم تعلّمه</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Emergency Button -->
+    <button class="emergency-btn" onclick="toggleEmergency()">
+      <span class="icon">🚨</span>
+      <span style="font-family:'Cairo',sans-serif;font-size:16px">عبارات سريعة</span>
+    </button>
+    <div class="emergency-panel" id="emergencyPanel"></div>
+
+    <!-- Quick Actions -->
+    <div class="section-header"><span class="emoji">⚡</span> Quick Practice <span style="font-family:'Cairo',sans-serif;font-size:13px;color:var(--text-secondary);font-weight:400;margin-right:4px">تدريب سريع</span></div>
+    <div class="quick-actions">
+      <div class="quick-action" onclick="openDrill()">
+        <div class="qa-icon">🔢</div>
+        <div class="qa-label">Numbers Drill</div>
+        <div class="qa-desc">تمرين الأرقام</div>
+      </div>
+      <div class="quick-action" onclick="openRoleplays()">
+        <div class="qa-icon">🎭</div>
+        <div class="qa-label">Roleplays</div>
+        <div class="qa-desc">حوارات تمثيلية</div>
+      </div>
+      <div class="quick-action" onclick="openFalseFriends()">
+        <div class="qa-icon">⚠️</div>
+        <div class="qa-label">Watch Out</div>
+        <div class="qa-desc">كلمات خادعة</div>
+      </div>
+    </div>
+
+    <!-- Modules -->
+    <div class="section-header"><span class="emoji">📚</span> Modules <span style="font-family:'Cairo',sans-serif;font-size:13px;color:var(--text-secondary);font-weight:400;margin-right:4px">الوحدات</span></div>
+    <div class="module-grid" id="moduleGrid"></div>
+  </div>
+
+  <!-- MODULE VIEW -->
+  <div class="module-view" id="moduleView">
+    <div id="moduleContent"></div>
+  </div>
+
+  <!-- ROLEPLAY VIEW -->
+  <div class="roleplay-view" id="roleplayView">
+    <div class="module-header" style="margin-bottom:16px">
+      <h2>🎭 Roleplays</h2>
+      <div class="mh-count" style="font-family:'Cairo',sans-serif;font-size:14px;opacity:0.9">حوارات تمثيلية</div>
+      <div class="mh-count" style="margin-top:4px">20 real conversations · ٢٠ محادثة واقعية</div>
+    </div>
+    <div class="roleplay-list" id="roleplayList"></div>
+  </div>
+
+  <!-- NUMBERS DRILL VIEW -->
+  <div class="drill-view" id="drillView">
+    <div class="module-header" style="margin-bottom:16px">
+      <h2>🔢 Numbers Drill</h2>
+      <div class="mh-count" style="font-family:'Cairo',sans-serif;font-size:14px;opacity:0.9">تمرين الأرقام</div>
+      <div class="mh-count" style="margin-top:4px">Say the price in English · انطق السعر بالإنجليزية</div>
+    </div>
+    <div class="drill-progress" id="drillProgress"></div>
+    <div class="drill-card" id="drillCard">
+      <div class="drill-price" id="drillPrice"></div>
+      <div class="drill-unit">riyals</div>
+      <div class="drill-answer" id="drillAnswer"></div>
+      <div class="drill-answer-arb" id="drillAnswerArb"></div>
+      <div class="drill-controls">
+        <button class="drill-btn secondary" onclick="showDrillAnswer()">Show · أظهر</button>
+        <button class="drill-btn secondary" onclick="playDrillAudio()">🔊 Listen · استمع</button>
+        <button class="drill-btn primary" onclick="nextDrill()">Next · التالي →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FALSE FRIENDS VIEW -->
+  <div class="ff-view" id="ffView">
+    <div class="module-header" style="margin-bottom:16px; background: linear-gradient(135deg, #C97200, var(--orange-accent));">
+      <h2>⚠️ Watch Out!</h2>
+      <div class="mh-count" style="font-family:'Cairo',sans-serif;font-size:14px;opacity:0.9">كلمات خادعة للمتحدثين بالعربية</div>
+      <div class="mh-count" style="margin-top:4px">١٠ كلمات يجب الانتباه لها</div>
+    </div>
+    <div id="ffList"></div>
+  </div>
+
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <button class="active" id="bnHome" onclick="goHome()">
+    <span class="bnav-icon">🏠</span>
+    الرئيسية
+  </button>
+  <button id="bnModules" onclick="showAllModules()">
+    <span class="bnav-icon">📚</span>
+    الوحدات
+  </button>
+  <button id="bnDrill" onclick="openDrill()">
+    <span class="bnav-icon">🔢</span>
+    أرقام
+  </button>
+  <button id="bnRoleplay" onclick="openRoleplays()">
+    <span class="bnav-icon">🎭</span>
+    حوارات
+  </button>
+</nav>
+
+<script>
+// ========== DATA ==========
+const EMERGENCY = [
+  { en: "Sorry, could you repeat that?", ar: "عذرًا، هل يمكنك تكرار ذلك؟" },
+  { en: "A bit slower, please.", ar: "ببطء قليلًا من فضلك." },
+  { en: "One moment, please.", ar: "لحظة من فضلك." },
+  { en: "This item or the total?", ar: "هذا المنتج أم المجموع؟" },
+  { en: "Do you mean one or two?", ar: "هل تقصد واحدًا أم اثنين؟" },
+  { en: "Do you mean thirteen or thirty?", ar: "هل تقصد 13 أم 30؟" },
+  { en: "Cash or card?", ar: "نقدًا أم بالبطاقة؟" },
+  { en: "Please tap your card or phone here.", ar: "من فضلك قرّب البطاقة أو الهاتف هنا." },
+  { en: "It didn't go through. Please try again.", ar: "لم تتم العملية. من فضلك حاول مرة أخرى." },
+  { en: "Sorry, I can't change prices.", ar: "عذرًا، لا أستطيع تغيير الأسعار." },
+  { en: "I can call a supervisor.", ar: "يمكنني استدعاء المشرف." },
+  { en: "Customer service can help you with that.", ar: "خدمة العملاء يمكنها مساعدتك في ذلك." },
+];
+
+const FALSE_FRIENDS = [
+  { w1: "receipt", m1: "إيصال", w2: "recipe", m2: "وصفة طبخ", note: "العميل الذي يطلب \"receipt\" يريد ورقة إثبات الشراء. أما \"recipe\" فهي وصفة طبخ." },
+  { w1: "change", m1: "الباقي / فكة", w2: "change", m2: "استبدال / تغيير", note: "\"change\" عند الكاشير تعني باقي المبلغ. لكن \"change an item\" تعني استبدال المنتج." },
+  { w1: "exchange", m1: "استبدال منتج", w2: "refund", m2: "استرجاع مبلغ", note: "Exchange = استبدال بمنتج آخر. Refund = استرجاع المبلغ نقدًا." },
+  { w1: "bill", m1: "فاتورة", w2: "bill", m2: "ورقة نقدية", note: "\"Can I see the bill?\" = المجموع. \"Do you have a smaller bill?\" = ورقة نقدية أصغر." },
+  { w1: "card", m1: "بطاقة", w2: "cart", m2: "عربة تسوق", note: "متشابهتان جدًا في النطق. \"card\" تنتهي بحرف D و\"cart\" تنتهي بحرف T. ركّز في السماع." },
+  { w1: "points", m1: "نقاط ولاء", w2: "discount", m2: "خصم", note: "النقاط = مكافآت تُجمع مع الوقت. الخصم = تخفيض فوري على السعر." },
+  { w1: "cash back", m1: "سحب نقدي عند الدفع", w2: "", m2: "", note: "ليس استرجاعًا. يعني أن العميل يريد سحب مبلغ نقدي إضافي عند الدفع بالبطاقة. معظم السوبرماركتات في السعودية لا تقدم هذه الخدمة." },
+  { w1: "price match", m1: "مطابقة سعر متجر آخر", w2: "", m2: "", note: "العميل يريد منك مطابقة سعر أرخص من متجر آخر. حوّله لخدمة العملاء." },
+  { w1: "tap", m1: "تماس (دفع لاسلكي)", w2: "insert", m2: "إدخال البطاقة", note: "Tap = قرّب البطاقة من الجهاز. Insert = أدخل طرف الشريحة في الفتحة." },
+  { w1: "separate", m1: "افصل (أكياس أو فواتير)", w2: "", m2: "", note: "قد تعني أكياس منفصلة أو فواتير منفصلة. اسأل: \"أكياس منفصلة أم فواتير منفصلة؟\"" },
+];
+
+const MODULES = [
+  { id: 1, title: "Numbers + Prices", titleAr: "الأرقام والأسعار", icon: "🔢", cards: [1,20], watchOut: "الأرقام المتشابهة مثل 13/30 و15/50 و17/70 و18/80 والكسور العشرية هي أكثر ما يسبب سوء الفهم." },
+  { id: 2, title: "Greeting + Starting", titleAr: "الترحيب والبداية", icon: "👋", cards: [21,35], watchOut: "انتبه للفرق بين \"card\" (بطاقة) و\"cart\" (عربة). وقد يطلب العميل فاتورتين من البداية." },
+  { id: 3, title: "Scanning + Bagging", titleAr: "المسح والتعبئة", icon: "🛍️", cards: [36,55], watchOut: "كلمة \"separate\" قد تعني أكياس منفصلة أو فواتير منفصلة. اسأل العميل أيهما يقصد." },
+  { id: 4, title: "Prices + Discounts", titleAr: "الأسعار والخصومات", icon: "🏷️", cards: [56,70], watchOut: "\"النقاط\" غير \"الخصم\". وعبارتا \"price match\" و\"cash back\" قد تُربكانك — لا توافق دون فهم." },
+  { id: 5, title: "Payment", titleAr: "الدفع", icon: "💳", cards: [71,90], watchOut: "انتبه للفرق بين \"tap\" (تماس) و\"insert\" (إدخال). وتعامل بهدوء مع البطاقة المرفوضة والدفع المقسّم." },
+  { id: 6, title: "Receipt + Closing", titleAr: "الإيصال والختام", icon: "🧾", cards: [91,105], watchOut: "\"receipt\" (إيصال) تختلف عن \"recipe\" (وصفة طبخ). و\"bill\" قد تعني فاتورة أو ورقة نقدية." },
+  { id: 7, title: "Problems + Exceptions", titleAr: "المشاكل والاستثناءات", icon: "⚠️", cards: [106,120], watchOut: "المسح المزدوج غير الكمية. وانتبه للفرق بين الإرجاع والاستبدال. وطلب المدير لا يعني أنك أخطأت." },
+];
+
+const CARDS = [
+  // MODULE 1: Numbers + Prices (1-20)
+  {id:1, cust:["What's the total?","Total, please."], custAr:"كم المجموع؟", cash:"The total is ___ riyals.", cashAr:"المجموع ___ ريالًا."},
+  {id:2, cust:["How much is this item?","What's the price of this one?"], custAr:"كم سعر هذا المنتج؟", cash:"This item is ___ riyals.", cashAr:"سعر هذا المنتج ___ ريالًا."},
+  {id:3, cust:["Can you repeat the total?","Say it again, please."], custAr:"هل تعيد المجموع؟", cash:"Sure. The total is ___ riyals.", cashAr:"أكيد. المجموع ___ ريالًا."},
+  {id:4, cust:["This item or the total?","Which one is that?"], custAr:"هذا المنتج أم المجموع؟", cash:"This is the total. / This is the item price.", cashAr:"هذا المجموع / هذا سعر المنتج."},
+  {id:5, cust:["47.75?","Forty-seven point seven five?"], custAr:"٤٧٫٧٥؟", cash:"Yes, 47 riyals and 75 halalah.", cashAr:"نعم، ٤٧ ريالًا و٧٥ هللة."},
+  {id:6, cust:["Did you say thirteen?","Did you say thirty?"], custAr:"هل قلت 13؟ / 30؟", cash:"Did you mean thirteen or thirty?", cashAr:"هل تقصد 13 أم 30؟"},
+  {id:7, cust:["Did you say fifteen?","Did you say fifty?"], custAr:"هل قلت 15؟ / 50؟", cash:"Did you mean fifteen or fifty?", cashAr:"هل تقصد 15 أم 50؟"},
+  {id:8, cust:["Did you say seventeen?","Did you say seventy?"], custAr:"هل قلت 17؟ / 70؟", cash:"Did you mean seventeen or seventy?", cashAr:"هل تقصد 17 أم 70؟"},
+  {id:9, cust:["Did you say eighteen?","Did you say eighty?"], custAr:"هل قلت 18؟ / 80؟", cash:"Did you mean eighteen or eighty?", cashAr:"هل تقصد 18 أم 80؟"},
+  {id:10, cust:["Did you say fourteen?","Did you say forty?"], custAr:"هل قلت 14؟ / 40؟", cash:"Did you mean fourteen or forty?", cashAr:"هل تقصد 14 أم 40؟"},
+  {id:11, cust:["Is that 16 or 60?","Sixteen or sixty?"], custAr:"16 أم 60؟", cash:"Sixteen is 16. Sixty is 60.", cashAr:"ستة عشر 16. ستون 60."},
+  {id:12, cust:["How much is the change?","My change?"], custAr:"كم الباقي؟", cash:"Your change is ___ riyals.", cashAr:"الباقي ___ ريالًا."},
+  {id:13, cust:["Small change, please.","Small notes, please."], custAr:"فكة/فئات صغيرة من فضلك.", cash:"I'll try, if I have it.", cashAr:"سأحاول إذا كان متوفرًا."},
+  {id:14, cust:["Show me the total.","Where is the total?"], custAr:"أرني المجموع.", cash:"It's on the screen here.", cashAr:"هو على الشاشة هنا."},
+  {id:15, cust:["Is that with tax?","Is this the final price?"], custAr:"هل هذا السعر النهائي؟", cash:"Yes, this is the final total.", cashAr:"نعم، هذا المجموع النهائي."},
+  {id:16, cust:["How much is it after discount?","Final price?"], custAr:"كم بعد الخصم؟", cash:"The system shows the final price.", cashAr:"النظام يظهر السعر النهائي."},
+  {id:17, cust:["Can you speak slower?","Slower, please."], custAr:"ببطء من فضلك.", cash:"Sure.", cashAr:"أكيد."},
+  {id:18, cust:["Sorry?","What did you say?"], custAr:"عفوًا؟ ماذا قلت؟", cash:"The total is ___ riyals.", cashAr:"المجموع ___ ريالًا."},
+  {id:19, cust:["Is it 100 or 1,000?","One hundred or one thousand?"], custAr:"100 أم 1000؟", cash:"One hundred is 100. One thousand is 1,000.", cashAr:"مئة 100. ألف 1000."},
+  {id:20, cust:["Can you write it?","Can you show it?"], custAr:"هل يمكنك كتابته/إظهاره؟", cash:"I can show it on the screen.", cashAr:"يمكنني إظهاره على الشاشة."},
+  // MODULE 2: Greeting + Starting (21-35)
+  {id:21, cust:["Hi.","Hello."], custAr:"مرحبًا.", cash:"Hello. Welcome.", cashAr:"مرحبًا. أهلًا وسهلًا."},
+  {id:22, cust:["Good morning.","Good evening."], custAr:"صباح الخير / مساء الخير.", cash:"Good morning. / Good evening.", cashAr:"صباح الخير / مساء الخير."},
+  {id:23, cust:["How are you?","How's your day?"], custAr:"كيف حالك؟", cash:"I'm good, thank you.", cashAr:"أنا بخير، شكرًا لك."},
+  {id:24, cust:["Can I put them here?","Where do I put this?"], custAr:"أين أضع هذا؟", cash:"Yes, please put the items here.", cashAr:"نعم، من فضلك ضع الأغراض هنا."},
+  {id:25, cust:["Do you have bags?","Can I get a bag?"], custAr:"هل عندكم أكياس؟", cash:"Sure. One bag or two?", cashAr:"أكيد. كيس واحد أم كيسين؟"},
+  {id:26, cust:["No bag, thanks.","I have my own bag."], custAr:"لا أريد كيسًا.", cash:"Okay, no bag.", cashAr:"حسنًا، بدون كيس."},
+  {id:27, cust:["Two bags, please.","Give me two bags."], custAr:"كيسان من فضلك.", cash:"Sure.", cashAr:"أكيد."},
+  {id:28, cust:["Do you have a loyalty program?","Do you have points?"], custAr:"هل لديكم نقاط؟", cash:"Do you have the loyalty card or app?", cashAr:"هل لديك بطاقة/تطبيق النقاط؟"},
+  {id:29, cust:["No, I don't.","Not with me."], custAr:"لا.", cash:"No problem. Let's continue.", cashAr:"لا مشكلة. نكمل."},
+  {id:30, cust:["Two bills, please.","Two transactions."], custAr:"فاتورتان من فضلك.", cash:"Sure. Which items are for the first bill?", cashAr:"أكيد. أي الأغراض للفاتورة الأولى؟"},
+  {id:31, cust:["Separate these, please.","This is for another person."], custAr:"افصل هذه.", cash:"Okay. Please show me which items.", cashAr:"حسنًا. من فضلك حدّد أي الأغراض."},
+  {id:32, cust:["That's all.","No more items."], custAr:"هذا كل شيء.", cash:"Okay.", cashAr:"حسنًا."},
+  {id:33, cust:["One moment.","Wait, please."], custAr:"لحظة.", cash:"No problem. Take your time.", cashAr:"لا مشكلة. خذ وقتك."},
+  {id:34, cust:["Can you hurry?","I'm in a hurry."], custAr:"أنا مستعجل.", cash:"I'll be as fast as I can.", cashAr:"سأكون سريعًا قدر الإمكان."},
+  {id:35, cust:["Can you help me?","I need help."], custAr:"أحتاج مساعدة.", cash:"I can call a staff member to help you.", cashAr:"يمكنني الاتصال بموظف ليساعدك."},
+  // MODULE 3: Scanning + Bagging (36-55)
+  {id:36, cust:["Please be careful.","It's fragile."], custAr:"من فضلك انتبه.", cash:"Sure. I'll be careful.", cashAr:"أكيد. سأنتبه."},
+  {id:37, cust:["Separate the eggs.","Don't crush the bread."], custAr:"افصل البيض/لا تسحق الخبز.", cash:"I'll put fragile items separately.", cashAr:"سأضع الأشياء القابلة للكسر منفصلًا."},
+  {id:38, cust:["Double-bag this.","Two bags for this."], custAr:"ضعه في كيسين.", cash:"Yes, of course.", cashAr:"نعم، بالطبع."},
+  {id:39, cust:["Keep these separate.","Separate bag, please."], custAr:"كيس منفصل.", cash:"Okay. Separate bag.", cashAr:"حسنًا. كيس منفصل."},
+  {id:40, cust:["Don't mix food and cleaning items.","Keep them separate."], custAr:"لا تخلط الطعام والمنظفات.", cash:"Sure. I'll separate them.", cashAr:"أكيد. سأفصلها."},
+  {id:41, cust:["I'll bag it.","I will pack myself."], custAr:"سأقوم بالتعبئة.", cash:"Sure. Thank you.", cashAr:"تفضل. شكرًا لك."},
+  {id:42, cust:["This is heavy.","Put it in one bag."], custAr:"هذا ثقيل.", cash:"Okay.", cashAr:"حسنًا."},
+  {id:43, cust:["I forgot one item.","I'll get one more thing."], custAr:"نسيت شيئًا.", cash:"Okay. I'll wait.", cashAr:"حسنًا. سأنتظر."},
+  {id:44, cust:["Cancel this item.","Remove this, please."], custAr:"احذف هذا.", cash:"Okay. I'll remove it.", cashAr:"حسنًا. سأزيله."},
+  {id:45, cust:["That's not mine.","I didn't buy that."], custAr:"هذا ليس لي.", cash:"Okay. I'll remove it.", cashAr:"حسنًا. سأزيله."},
+  {id:46, cust:["I have two of these.","Two pieces."], custAr:"لدي اثنان.", cash:"Okay, two.", cashAr:"حسنًا، اثنان."},
+  {id:47, cust:["Can you scan this first?","This one first."], custAr:"هذا أولًا.", cash:"Okay.", cashAr:"حسنًا."},
+  {id:48, cust:["This has no barcode.","No barcode here."], custAr:"لا يوجد باركود.", cash:"One moment. I will check.", cashAr:"لحظة. سأتحقق."},
+  {id:49, cust:["Please don't scan it twice.","Be careful, please."], custAr:"من فضلك لا تمسحه مرتين.", cash:"Sure.", cashAr:"أكيد."},
+  {id:50, cust:["Can you pack it neatly?","Pack it nicely, please."], custAr:"رتبها جيدًا.", cash:"I'll do my best.", cashAr:"سأبذل جهدي."},
+  {id:51, cust:["Can you put it in a box?","Do you have a box?"], custAr:"هل عندكم صندوق؟", cash:"Sorry, we only have bags here.", cashAr:"عذرًا، لدينا أكياس فقط هنا."},
+  {id:52, cust:["Can you separate these for two people?","Two bags for two people."], custAr:"افصلها لشخصين.", cash:"Okay. Please show me which items.", cashAr:"حسنًا. من فضلك حدّد الأغراض."},
+  {id:53, cust:["Not this one.","I don't want this."], custAr:"لا أريد هذا.", cash:"Okay. I'll remove it.", cashAr:"حسنًا. سأزيله."},
+  {id:54, cust:["Wait, I'm still putting items.","One second."], custAr:"لحظة.", cash:"No problem.", cashAr:"لا مشكلة."},
+  {id:55, cust:["That's it.","Done."], custAr:"انتهيت.", cash:"Okay.", cashAr:"حسنًا."},
+  // MODULE 4: Prices + Discounts (56-70)
+  {id:56, cust:["Is this on sale?","Any discount?"], custAr:"هل عليه خصم؟", cash:"If there is a discount, it applies automatically in the system.", cashAr:"إذا كان هناك خصم فسيُطبق تلقائيًا في النظام."},
+  {id:57, cust:["The shelf price is different.","It was cheaper on the shelf."], custAr:"السعر على الرف مختلف.", cash:"Okay. I'll check the price.", cashAr:"حسنًا. سأتحقق من السعر."},
+  {id:58, cust:["That's too expensive.","Remove it."], custAr:"هذا غالٍ. احذفه.", cash:"Sure. I'll remove it.", cashAr:"أكيد. سأزيله."},
+  {id:59, cust:["Can you give me a discount?","Make it cheaper."], custAr:"هل يمكنك عمل خصم؟", cash:"Sorry, I can't change prices.", cashAr:"عذرًا، لا أستطيع تغيير الأسعار."},
+  {id:60, cust:["Do you price match?","Match the other store's price?"], custAr:"هل تطابقون الأسعار؟", cash:"I'm not sure. Customer service can confirm the policy.", cashAr:"لست متأكدًا. خدمة العملاء تؤكد السياسة."},
+  {id:61, cust:["Can I use points?","Use my points."], custAr:"هل يمكنني استخدام النقاط؟", cash:"Do you have the loyalty app or card?", cashAr:"هل لديك تطبيق/بطاقة النقاط؟"},
+  {id:62, cust:["I don't have it.","I forgot it."], custAr:"ليس لدي.", cash:"No problem. Let's continue.", cashAr:"لا مشكلة. نكمل."},
+  {id:63, cust:["How much is it after discount?","Final price?"], custAr:"كم السعر النهائي؟", cash:"The system shows the final price.", cashAr:"النظام يظهر السعر النهائي."},
+  {id:64, cust:["This price is wrong.","It's not correct."], custAr:"السعر خطأ.", cash:"Okay. I'll check it.", cashAr:"حسنًا. سأتحقق منه."},
+  {id:65, cust:["Can you remove the tax?","No tax?"], custAr:"هل يمكن بدون ضريبة؟", cash:"Sorry, I can't change that.", cashAr:"عذرًا، لا أستطيع تغيير ذلك."},
+  {id:66, cust:["Can you show me the discount?","Where is the discount?"], custAr:"أين الخصم؟", cash:"It appears on the receipt / on the screen.", cashAr:"يظهر على الإيصال/على الشاشة."},
+  {id:67, cust:["Can you check this item price only?","Just check the price."], custAr:"فقط افحص السعر.", cash:"Okay. One moment.", cashAr:"حسنًا. لحظة."},
+  {id:68, cust:["I want two totals.","Separate totals."], custAr:"أريد مجموعين.", cash:"Sure. Which items are separate?", cashAr:"أكيد. أي الأغراض منفصلة؟"},
+  {id:69, cust:["Cancel the first bill.","Cancel this transaction."], custAr:"ألغِ العملية.", cash:"Okay. I will cancel it.", cashAr:"حسنًا. سأُلغيها."},
+  {id:70, cust:["Can you round it?","Round it, please."], custAr:"هل يمكن تقريب المبلغ؟", cash:"Sorry, I can't round it.", cashAr:"عذرًا، لا أستطيع التقريب."},
+  // MODULE 5: Payment (71-90)
+  {id:71, cust:["Card.","I will pay by card."], custAr:"سأدفع بالبطاقة.", cash:"Cash or card?", cashAr:"نقدًا أم بالبطاقة؟"},
+  {id:72, cust:["Cash.","I'll pay cash."], custAr:"سأدفع نقدًا.", cash:"Okay.", cashAr:"حسنًا."},
+  {id:73, cust:["Can I tap?","Contactless?"], custAr:"هل يمكن الدفع بالتماس؟", cash:"Yes. Please tap your card or phone here.", cashAr:"نعم. قرّب البطاقة أو الهاتف هنا."},
+  {id:74, cust:["Should I insert it?","Insert the card?"], custAr:"أدخل البطاقة؟", cash:"Yes, please insert the card.", cashAr:"نعم، من فضلك أدخل البطاقة."},
+  {id:75, cust:["PIN?","Do I need a PIN?"], custAr:"الرقم السري؟", cash:"Yes. Please enter your PIN.", cashAr:"نعم. أدخل الرقم السري."},
+  {id:76, cust:["It says declined.","It didn't work."], custAr:"مرفوض / لم يعمل.", cash:"It didn't go through. Please try again.", cashAr:"لم تتم العملية. حاول مرة أخرى."},
+  {id:77, cust:["Let me try again.","One more time."], custAr:"سأحاول مرة أخرى.", cash:"Okay.", cashAr:"حسنًا."},
+  {id:78, cust:["I'll use another card.","Different card."], custAr:"بطاقة أخرى.", cash:"Okay. Please try this one.", cashAr:"حسنًا. جرّب هذه."},
+  {id:79, cust:["I will pay by phone.","Apple Pay?"], custAr:"بالجوال؟", cash:"Yes. Please tap your phone.", cashAr:"نعم. قرّب هاتفك."},
+  {id:80, cust:["Part cash and part card.","Split payment."], custAr:"تقسيم الدفع.", cash:"Yes. How much cash first?", cashAr:"نعم. كم ستدفع نقدًا أولًا؟"},
+  {id:81, cust:["Fifty cash.","100 cash."], custAr:"50/100 نقدًا.", cash:"Okay.", cashAr:"حسنًا."},
+  {id:82, cust:["Here's 100.","Here's 200."], custAr:"تفضل 100/200.", cash:"Thank you.", cashAr:"شكرًا لك."},
+  {id:83, cust:["Do you have change?","Can you break this?"], custAr:"هل لديك فكة؟", cash:"I'll try, if I have it.", cashAr:"سأحاول إذا كان متوفرًا."},
+  {id:84, cust:["Small change, please.","Small notes."], custAr:"فكة.", cash:"I'll try.", cashAr:"سأحاول."},
+  {id:85, cust:["Where do I tap?","Here?"], custAr:"أين أقرّب؟", cash:"Yes, here.", cashAr:"نعم، هنا."},
+  {id:86, cust:["It's asking for PIN.","PIN?"], custAr:"يطلب الرقم السري.", cash:"Please enter your PIN.", cashAr:"أدخل الرقم السري."},
+  {id:87, cust:["Cash back?","Can I get cash back?"], custAr:"سحب نقدي؟", cash:"Sorry, we don't offer cash back here.", cashAr:"عذرًا، لا نقدم سحبًا نقديًا هنا."},
+  {id:88, cust:["Cancel the payment.","Cancel it."], custAr:"ألغِ الدفع.", cash:"Okay. I will cancel it.", cashAr:"حسنًا. سأُلغي الدفع."},
+  {id:89, cust:["Can I pay later?","Hold it."], custAr:"هل أدفع لاحقًا؟", cash:"Sorry, I can't do that from the cashier.", cashAr:"عذرًا، لا أستطيع ذلك من الكاشير."},
+  {id:90, cust:["Cash only?","Card only?"], custAr:"نقد فقط؟/بطاقة فقط؟", cash:"This counter accepts cash and card.", cashAr:"هذا الكاشير يقبل النقد والبطاقة."},
+  // MODULE 6: Receipt + Closing (91-105)
+  {id:91, cust:["Receipt, please.","Can I have the receipt?"], custAr:"الإيصال من فضلك.", cash:"Do you want the receipt?", cashAr:"هل تريد الإيصال؟"},
+  {id:92, cust:["No receipt.","No, thanks."], custAr:"لا أريد إيصالًا.", cash:"Okay, no receipt.", cashAr:"حسنًا، بدون إيصال."},
+  {id:93, cust:["Can you email it?","Send it by SMS?"], custAr:"هل يمكن إرسال الإيصال؟", cash:"Sorry, we only print the receipt.", cashAr:"عذرًا، الإيصال مطبوع فقط."},
+  {id:94, cust:["Where is the receipt?","I didn't get it."], custAr:"أين الإيصال؟", cash:"Here you go.", cashAr:"تفضل."},
+  {id:95, cust:["One more bag, please.","Extra bag."], custAr:"كيس إضافي.", cash:"Sure. Here you go.", cashAr:"أكيد. تفضل."},
+  {id:96, cust:["Just a second.","Wait, please."], custAr:"لحظة.", cash:"No problem. Take your time.", cashAr:"لا مشكلة. خذ وقتك."},
+  {id:97, cust:["Thank you.","Thanks."], custAr:"شكرًا.", cash:"Thank you. Have a nice day.", cashAr:"شكرًا لك. يوم سعيد."},
+  {id:98, cust:["Bye.","Goodbye."], custAr:"مع السلامة.", cash:"Goodbye.", cashAr:"مع السلامة."},
+  {id:99, cust:["This wasn't scanned.","I forgot to pay for this."], custAr:"لم يتم مسحه/نسيت دفعه.", cash:"No problem. I'll scan it now.", cashAr:"لا مشكلة. سأقوم بمسحه الآن."},
+  {id:100, cust:["Can I add this?","Add one more item."], custAr:"هل أضيف هذا؟", cash:"Yes, please give it to me.", cashAr:"نعم، أعطني إياه."},
+  {id:101, cust:["Can you reprint the receipt?","Print again?"], custAr:"هل تعيد طباعة الإيصال؟", cash:"Sorry, I can't. Customer service can help.", cashAr:"عذرًا، لا أستطيع. خدمة العملاء تساعد."},
+  {id:102, cust:["The receipt is wrong.","This is incorrect."], custAr:"الإيصال خطأ.", cash:"Okay. I will call my supervisor.", cashAr:"حسنًا. سأستدعي المشرف."},
+  {id:103, cust:["Where is customer service?","Customer service?"], custAr:"أين خدمة العملاء؟", cash:"It's over there.", cashAr:"هناك."},
+  {id:104, cust:["Next?","Are you ready?"], custAr:"التالي؟", cash:"Next, please.", cashAr:"التالي من فضلك."},
+  {id:105, cust:["Can you help me carry?","Can someone help me?"], custAr:"هل يساعدني أحد؟", cash:"I can call a staff member to help you.", cashAr:"يمكنني الاتصال بموظف ليساعدك."},
+  // MODULE 7: Problems + Exceptions (106-120)
+  {id:106, cust:["It's not scanning.","Barcode doesn't work."], custAr:"لا يتم مسحه.", cash:"One moment, please.", cashAr:"لحظة من فضلك."},
+  {id:107, cust:["Here's the barcode.","It's on the back."], custAr:"هذا الباركود.", cash:"Thank you.", cashAr:"شكرًا لك."},
+  {id:108, cust:["You scanned it twice.","Double scan."], custAr:"تم مسحه مرتين.", cash:"Sorry. I'll fix it.", cashAr:"عذرًا. سأصلح ذلك."},
+  {id:109, cust:["Wrong item.","That's not mine."], custAr:"منتج خطأ/ليس لي.", cash:"Okay. I'll remove it.", cashAr:"حسنًا. سأزيله."},
+  {id:110, cust:["The price is wrong.","This is not correct."], custAr:"السعر خطأ.", cash:"Okay. I'll check it.", cashAr:"حسنًا. سأتحقق منه."},
+  {id:111, cust:["How long will it take?","Why so long?"], custAr:"كم سيستغرق؟", cash:"It will take a minute. Sorry.", cashAr:"سيأخذ دقيقة. عذرًا."},
+  {id:112, cust:["The machine is not working.","Terminal error."], custAr:"جهاز الدفع لا يعمل.", cash:"Please try again.", cashAr:"حاول مرة أخرى."},
+  {id:113, cust:["Still not working.","It failed again."], custAr:"لا يعمل مرة أخرى.", cash:"I will call my supervisor.", cashAr:"سأستدعي المشرف."},
+  {id:114, cust:["Manager, please.","I want to complain."], custAr:"أريد المشرف/أشتكي.", cash:"Sure. I'll call my supervisor.", cashAr:"أكيد. سأستدعي المشرف."},
+  {id:115, cust:["Where is milk?","Where is rice?"], custAr:"أين الحليب/الأرز؟", cash:"It's in aisle ___.", cashAr:"في الممر ___."},
+  {id:116, cust:["Where is customer service?","Customer service?"], custAr:"أين خدمة العملاء؟", cash:"It's over there.", cashAr:"هناك."},
+  {id:117, cust:["Can you check the back?","Do you have more stock?"], custAr:"هل يوجد المزيد؟", cash:"I can't leave the register, but I can call a staff member.", cashAr:"لا أستطيع ترك الكاشير، لكن يمكنني الاتصال بموظف."},
+  {id:118, cust:["Can you hold this for me?","Keep it for me."], custAr:"هل تحجزه لي؟", cash:"Sorry, I can't hold items. Please ask customer service.", cashAr:"عذرًا، لا يمكنني حجز الأغراض. اسأل خدمة العملاء."},
+  {id:119, cust:["I want to return this.","Refund, please."], custAr:"أريد إرجاع هذا.", cash:"Returns are handled at customer service.", cashAr:"الإرجاع يتم من خدمة العملاء."},
+  {id:120, cust:["Can I exchange this?","Replace it."], custAr:"أريد استبداله.", cash:"Exchange is handled at customer service.", cashAr:"الاستبدال يتم من خدمة العملاء."},
+];
+
+const ROLEPLAYS = [
+  { title:"Greeting + bags + card", lines:[
+    {s:"customer",en:"Hi.",ar:"مرحبًا"},{s:"cashier",en:"Hello. Welcome.",ar:"مرحبًا. أهلًا وسهلًا"},
+    {s:"customer",en:"Do you have bags?",ar:"هل عندكم أكياس؟"},{s:"cashier",en:"Sure. One bag or two?",ar:"أكيد. كيس واحد أم كيسين؟"},
+    {s:"customer",en:"One.",ar:"واحد"},{s:"cashier",en:"Cash or card?",ar:"نقدًا أم بالبطاقة؟"}
+  ]},
+  { title:"Cash + change", lines:[
+    {s:"customer",en:"Total, please.",ar:"كم المجموع؟"},{s:"cashier",en:"The total is 47 riyals and 75 halalah.",ar:"٤٧ ريالًا و٧٥ هللة"},
+    {s:"customer",en:"Here's 100.",ar:"تفضل 100"},{s:"cashier",en:"Thank you. Your change is 52 riyals and 25 halalah.",ar:"شكرًا. الباقي ٥٢ ريالًا و٢٥ هللة"}
+  ]},
+  { title:"Shelf price mismatch", lines:[
+    {s:"customer",en:"The shelf price is different.",ar:"السعر على الرف مختلف"},{s:"cashier",en:"Okay. I'll check the price. One moment.",ar:"حسنًا. سأتحقق. لحظة"},
+    {s:"customer",en:"Okay.",ar:"حسنًا"},{s:"cashier",en:"Sorry for the delay.",ar:"عذرًا على التأخير"}
+  ]},
+  { title:"Remove an item", lines:[
+    {s:"customer",en:"Remove this, please.",ar:"احذف هذا"},{s:"cashier",en:"Sure. I'll remove it.",ar:"أكيد. سأزيله"},
+    {s:"customer",en:"Thanks.",ar:"شكرًا"},{s:"cashier",en:"No problem.",ar:"لا مشكلة"}
+  ]},
+  { title:"Declined card", lines:[
+    {s:"customer",en:"Card.",ar:"بطاقة"},{s:"cashier",en:"Please tap your card or phone here.",ar:"قرّب البطاقة/الهاتف هنا"},
+    {s:"customer",en:"It says declined.",ar:"مرفوض"},{s:"cashier",en:"It didn't go through. Please try again.",ar:"لم تتم. حاول مرة أخرى"}
+  ]},
+  { title:"Split payment", lines:[
+    {s:"customer",en:"Part cash and part card.",ar:"جزء نقدًا وجزء بالبطاقة"},{s:"cashier",en:"Yes. How much cash first?",ar:"كم نقدًا أولًا؟"},
+    {s:"customer",en:"Fifty.",ar:"خمسون"},{s:"cashier",en:"Okay. Then card for the rest.",ar:"حسنًا. ثم بطاقة للباقي"}
+  ]},
+  { title:"Store directions", lines:[
+    {s:"customer",en:"Where is milk?",ar:"أين الحليب؟"},{s:"cashier",en:"It's in aisle 3.",ar:"في الممر ٣"},
+    {s:"customer",en:"Thanks.",ar:"شكرًا"},{s:"cashier",en:"You're welcome.",ar:"على الرحب والسعة"}
+  ]},
+  { title:"Barcode not scanning", lines:[
+    {s:"customer",en:"It's not scanning.",ar:"لا يتم مسحه"},{s:"cashier",en:"One moment, please.",ar:"لحظة"},
+    {s:"cashier",en:"Can you show me the barcode?",ar:"هل يمكنك إظهار الباركود؟"},{s:"customer",en:"Here.",ar:"تفضل"}
+  ]},
+  { title:"Slow line complaint", lines:[
+    {s:"customer",en:"This line is too slow.",ar:"الطابور بطيء"},{s:"cashier",en:"Sorry for the delay. I'm doing my best.",ar:"عذرًا. أبذل جهدي"}
+  ]},
+  { title:"Discount request (refusal)", lines:[
+    {s:"customer",en:"Can you give me a discount?",ar:"هل تعمل خصم؟"},{s:"cashier",en:"Sorry, I can't change prices.",ar:"عذرًا، لا أستطيع تغيير الأسعار"}
+  ]},
+  { title:"Cash back (trap)", lines:[
+    {s:"customer",en:"Can I get cash back?",ar:"سحب نقدي؟"},{s:"cashier",en:"Sorry, we don't offer cash back here.",ar:"عذرًا، لا نقدم ذلك"}
+  ]},
+  { title:"Return redirect", lines:[
+    {s:"customer",en:"I want to return this.",ar:"أريد إرجاع هذا"},{s:"cashier",en:"Returns are handled at customer service.",ar:"الإرجاع من خدمة العملاء"}
+  ]},
+  { title:"Forgot item after paying", lines:[
+    {s:"customer",en:"I forgot to pay for this.",ar:"نسيت دفع هذا"},{s:"cashier",en:"No problem. I'll scan it now.",ar:"لا مشكلة. سأمسحه الآن"}
+  ]},
+  { title:"Add item late", lines:[
+    {s:"customer",en:"Can I add this?",ar:"هل أضيف هذا؟"},{s:"cashier",en:"Yes, please give it to me.",ar:"نعم، أعطني إياه"}
+  ]},
+  { title:"Small change request", lines:[
+    {s:"customer",en:"Small change, please.",ar:"فكة من فضلك"},{s:"cashier",en:"I'll try, if I have it.",ar:"سأحاول إذا توفر"}
+  ]},
+  { title:"No receipt", lines:[
+    {s:"cashier",en:"Do you want the receipt?",ar:"هل تريد الإيصال؟"},{s:"customer",en:"No, thanks.",ar:"لا شكرًا"},
+    {s:"cashier",en:"Okay, no receipt.",ar:"حسنًا بدون إيصال"}
+  ]},
+  { title:"Receipt + extra bag", lines:[
+    {s:"customer",en:"Receipt, please.",ar:"الإيصال من فضلك"},{s:"cashier",en:"Here you go.",ar:"تفضل"},
+    {s:"customer",en:"One more bag, please.",ar:"كيس إضافي"},{s:"cashier",en:"Sure.",ar:"أكيد"}
+  ]},
+  { title:"Cutting the line", lines:[
+    {s:"customer",en:"Only one item. Can I go first?",ar:"غرض واحد. أتقدم؟"},{s:"cashier",en:"Please wait in line. Thank you.",ar:"انتظر في الطابور. شكرًا"}
+  ]},
+  { title:"Supervisor request", lines:[
+    {s:"customer",en:"Manager, please.",ar:"المشرف من فضلك"},{s:"cashier",en:"Sure. I'll call my supervisor.",ar:"أكيد. سأستدعي المشرف"}
+  ]},
+  { title:"Loyalty app missing", lines:[
+    {s:"customer",en:"Do you have points?",ar:"هل عندكم نقاط؟"},{s:"cashier",en:"Do you have the loyalty card or app?",ar:"هل لديك تطبيق/بطاقة النقاط؟"},
+    {s:"customer",en:"No.",ar:"لا"},{s:"cashier",en:"No problem. Let's continue.",ar:"لا مشكلة. نكمل"}
+  ]},
+];
+
+const DRILL_PRICES = [
+  {num:"12.00",en:"twelve riyals",ar:"اثنا عشر ريالًا"},
+  {num:"13.00",en:"thirteen riyals",ar:"ثلاثة عشر ريالًا"},
+  {num:"15.00",en:"fifteen riyals",ar:"خمسة عشر ريالًا"},
+  {num:"18.00",en:"eighteen riyals",ar:"ثمانية عشر ريالًا"},
+  {num:"19.00",en:"nineteen riyals",ar:"تسعة عشر ريالًا"},
+  {num:"20.00",en:"twenty riyals",ar:"عشرون ريالًا"},
+  {num:"21.00",en:"twenty-one riyals",ar:"واحد وعشرون ريالًا"},
+  {num:"25.00",en:"twenty-five riyals",ar:"خمسة وعشرون ريالًا"},
+  {num:"30.00",en:"thirty riyals",ar:"ثلاثون ريالًا"},
+  {num:"40.00",en:"forty riyals",ar:"أربعون ريالًا"},
+  {num:"47.00",en:"forty-seven riyals",ar:"سبعة وأربعون ريالًا"},
+  {num:"47.50",en:"forty-seven riyals and fifty halalah",ar:"٤٧ ريالًا و٥٠ هللة"},
+  {num:"47.75",en:"forty-seven riyals and seventy-five halalah",ar:"٤٧ ريالًا و٧٥ هللة"},
+  {num:"50.00",en:"fifty riyals",ar:"خمسون ريالًا"},
+  {num:"55.25",en:"fifty-five riyals and twenty-five halalah",ar:"٥٥ ريالًا و٢٥ هللة"},
+  {num:"60.00",en:"sixty riyals",ar:"ستون ريالًا"},
+  {num:"67.10",en:"sixty-seven riyals and ten halalah",ar:"٦٧ ريالًا و١٠ هللات"},
+  {num:"70.00",en:"seventy riyals",ar:"سبعون ريالًا"},
+  {num:"75.75",en:"seventy-five riyals and seventy-five halalah",ar:"٧٥ ريالًا و٧٥ هللة"},
+  {num:"80.00",en:"eighty riyals",ar:"ثمانون ريالًا"},
+  {num:"89.95",en:"eighty-nine riyals and ninety-five halalah",ar:"٨٩ ريالًا و٩٥ هللة"},
+  {num:"90.00",en:"ninety riyals",ar:"تسعون ريالًا"},
+  {num:"99.99",en:"ninety-nine riyals and ninety-nine halalah",ar:"٩٩ ريالًا و٩٩ هللة"},
+  {num:"100.00",en:"one hundred riyals",ar:"مئة ريال"},
+  {num:"105.00",en:"one hundred and five riyals",ar:"مئة وخمسة ريالات"},
+  {num:"110.50",en:"one hundred and ten riyals and fifty halalah",ar:"١١٠ ريالات و٥٠ هللة"},
+  {num:"125.75",en:"one hundred and twenty-five riyals and seventy-five halalah",ar:"١٢٥ ريالًا و٧٥ هللة"},
+  {num:"150.00",en:"one hundred and fifty riyals",ar:"مئة وخمسون ريالًا"},
+  {num:"175.25",en:"one hundred and seventy-five riyals and twenty-five halalah",ar:"١٧٥ ريالًا و٢٥ هللة"},
+  {num:"200.00",en:"two hundred riyals",ar:"مئتا ريال"},
+  {num:"250.00",en:"two hundred and fifty riyals",ar:"مئتان وخمسون ريالًا"},
+  {num:"275.75",en:"two hundred and seventy-five riyals and seventy-five halalah",ar:"٢٧٥ ريالًا و٧٥ هللة"},
+  {num:"300.00",en:"three hundred riyals",ar:"ثلاثمئة ريال"},
+  {num:"325.10",en:"three hundred and twenty-five riyals and ten halalah",ar:"٣٢٥ ريالًا و١٠ هللات"},
+  {num:"399.95",en:"three hundred and ninety-nine riyals and ninety-five halalah",ar:"٣٩٩ ريالًا و٩٥ هللة"},
+  {num:"450.00",en:"four hundred and fifty riyals",ar:"أربعمئة وخمسون ريالًا"},
+  {num:"500.00",en:"five hundred riyals",ar:"خمسمئة ريال"},
+  {num:"750.00",en:"seven hundred and fifty riyals",ar:"سبعمئة وخمسون ريالًا"},
+  {num:"1,000.00",en:"one thousand riyals",ar:"ألف ريال"},
+  {num:"1,250.50",en:"one thousand two hundred and fifty riyals and fifty halalah",ar:"١٢٥٠ ريالًا و٥٠ هللة"},
+];
+
+// ========== STATE ==========
+let currentView = 'home';
+let viewHistory = [];
+let showArabic = true;
+let mastery = {}; // cardId -> 'new'|'learning'|'confident'|'automatic'
+let drillIndex = 0;
+let drillShuffled = [];
+
+// Load mastery from memory
+try { mastery = JSON.parse(localStorage.getItem('cashier_mastery') || '{}'); } catch(e) {}
+
+function saveMastery() {
+  try { localStorage.setItem('cashier_mastery', JSON.stringify(mastery)); } catch(e) {}
+}
+
+// ========== TTS ==========
+let currentUtterance = null;
+function speak(text, rate = 1) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  var cleanText = text.replace(/___/g, '...');
+  var u = new SpeechSynthesisUtterance(cleanText);
+  u.lang = 'en-US';
+  u.rate = rate;
+  u.pitch = 1;
+  // Chrome Android fix: select an English voice explicitly
+  var voices = window.speechSynthesis.getVoices();
+  var engVoice = voices.find(function(v) { return v.lang.startsWith('en') && v.localService; })
+    || voices.find(function(v) { return v.lang.startsWith('en'); });
+  if (engVoice) u.voice = engVoice;
+  currentUtterance = u;
+  // Chrome Android fix: resume if paused
+  window.speechSynthesis.resume();
+  window.speechSynthesis.speak(u);
+  // Chrome Android bug: synthesis can pause after ~15s. Keep it alive.
+  if (window._ttsInterval) clearInterval(window._ttsInterval);
+  window._ttsInterval = setInterval(function() {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.resume();
+    } else {
+      clearInterval(window._ttsInterval);
+    }
+  }, 5000);
+}
+
+// Chrome requires voices to be loaded via event
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = function() {
+    window.speechSynthesis.getVoices();
+  };
+  // Force initial voice load
+  window.speechSynthesis.getVoices();
+}
+
+function speakCard(id, field, rate) {
+  const card = CARDS.find(c => c.id === id);
+  if (!card) return;
+  const text = field === 'cust' ? card.cust[0] : card.cash;
+  speak(text, rate || 1);
+}
+
+function speakEmergency(index) {
+  speak(EMERGENCY[index].en);
+}
+
+// ========== NAVIGATION ==========
+function setView(view) {
+  if (currentView !== view) viewHistory.push(currentView);
+  currentView = view;
+  document.getElementById('homeScreen').style.display = view === 'home' ? 'block' : 'none';
+  document.getElementById('moduleView').className = view === 'module' ? 'module-view active' : 'module-view';
+  document.getElementById('roleplayView').className = view === 'roleplay' ? 'roleplay-view active' : 'roleplay-view';
+  document.getElementById('drillView').className = view === 'drill' ? 'drill-view active' : 'drill-view';
+  document.getElementById('ffView').className = view === 'ff' ? 'ff-view active' : 'ff-view';
+  
+  document.getElementById('backBtn').className = view === 'home' ? 'back-btn' : 'back-btn visible';
+  
+  // Update bottom nav
+  document.querySelectorAll('.bottom-nav button').forEach(b => b.classList.remove('active'));
+  if (view === 'home') document.getElementById('bnHome').classList.add('active');
+  else if (view === 'module') document.getElementById('bnModules').classList.add('active');
+  else if (view === 'drill') document.getElementById('bnDrill').classList.add('active');
+  else if (view === 'roleplay') document.getElementById('bnRoleplay').classList.add('active');
+  
+  window.scrollTo(0, 0);
+}
+
+function goBack() {
+  if (viewHistory.length > 0) {
+    const prev = viewHistory.pop();
+    currentView = prev;
+    setView(prev);
+    viewHistory.pop(); // Remove duplicate
+  } else {
+    setView('home');
+  }
+}
+
+function goHome() {
+  viewHistory = [];
+  setView('home');
+  document.getElementById('navTitle').innerHTML = 'Cashier English <span style="font-size:13px;opacity:0.8;font-weight:400">إنجليزي الكاشير</span>';
+  document.getElementById('navSubtitle').textContent = 'Your daily register companion · رفيقك اليومي عند الكاشير';
+}
+
+function toggleArabic() {
+  showArabic = !showArabic;
+  document.body.classList.toggle('translation-hidden', !showArabic);
+  document.querySelector('.nav-icon-btn').style.opacity = showArabic ? '1' : '0.5';
+}
+
+// ========== EMERGENCY ==========
+function toggleEmergency() {
+  const panel = document.getElementById('emergencyPanel');
+  panel.classList.toggle('open');
+}
+
+function renderEmergency() {
+  const panel = document.getElementById('emergencyPanel');
+  panel.innerHTML = '<h3>🚨 عبارات سريعة — اضغط للاستماع</h3>' +
+    EMERGENCY.map((e, i) => `
+      <div class="emergency-phrase" onclick="speakEmergency(${i})">
+        <div class="play-icon">▶</div>
+        <div class="eng">${e.en}</div>
+        <div class="arb">${e.ar}</div>
+      </div>
+    `).join('');
+}
+
+// ========== MODULES ==========
+function getModuleCards(mod) {
+  return CARDS.filter(c => c.id >= mod.cards[0] && c.id <= mod.cards[1]);
+}
+
+function getModuleProgress(mod) {
+  const cards = getModuleCards(mod);
+  const learned = cards.filter(c => mastery[c.id] === 'confident' || mastery[c.id] === 'automatic').length;
+  return Math.round((learned / cards.length) * 100);
+}
+
+function renderModuleGrid() {
+  const grid = document.getElementById('moduleGrid');
+  grid.innerHTML = MODULES.map(mod => {
+    const progress = getModuleProgress(mod);
+    const count = mod.cards[1] - mod.cards[0] + 1;
+    return `
+      <div class="module-card" onclick="openModule(${mod.id})">
+        <div class="mc-icon">${mod.icon}</div>
+        <div class="mc-info">
+          <div class="mc-title">${mod.title} <span style="font-family:'Cairo',sans-serif;font-size:12px;color:var(--text-secondary);font-weight:400">${mod.titleAr}</span></div>
+          <div class="mc-count">${count} بطاقة</div>
+          <div class="mc-progress"><div class="mc-progress-fill" style="width:${progress}%"></div></div>
+        </div>
+        <div class="mc-arrow">›</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function showAllModules() {
+  goHome();
+  setTimeout(() => {
+    document.getElementById('moduleGrid').scrollIntoView({ behavior: 'smooth' });
+  }, 100);
+}
+
+function openModule(modId) {
+  const mod = MODULES.find(m => m.id === modId);
+  if (!mod) return;
+  
+  document.getElementById('navTitle').textContent = mod.title;
+  document.getElementById('navSubtitle').textContent = `Module ${mod.id}`;
+  
+  const cards = getModuleCards(mod);
+  const content = document.getElementById('moduleContent');
+  
+  let html = `
+    <div class="module-header">
+      <h2>${mod.icon} ${mod.title}</h2>
+      <div class="mh-count" style="font-family:'Cairo',sans-serif;font-size:14px;opacity:0.9">${mod.titleAr}</div>
+      <div class="mh-count" style="margin-top:4px">${cards.length} بطاقة تفاعلية</div>
+    </div>
+  `;
+  
+  if (mod.watchOut) {
+    html += `
+      <div class="watch-out-banner">
+        <div class="wo-icon">⚠️</div>
+        <div class="wo-text"><strong>انتبه:</strong> ${mod.watchOut}</div>
+      </div>
+    `;
+  }
+  
+  html += '<div class="search-bar"><span class="search-icon">🔍</span><input type="text" placeholder="ابحث في البطاقات..." oninput="filterCards(this.value, ${mod.id})"></div>';
+  
+  html += `<div id="cardList${mod.id}">`;
+  html += cards.map(card => renderCard(card)).join('');
+  html += '</div>';
+  
+  content.innerHTML = html;
+  setView('module');
+}
+
+function renderCard(card) {
+  const m = mastery[card.id] || 'new';
+  return `
+    <div class="interaction-card" id="card${card.id}">
+      <div class="ic-top" onclick="toggleCard(${card.id})">
+        <div class="ic-num">${card.id}</div>
+        <div class="ic-content">
+          <div class="ic-customer-label">العميل يقول</div>
+          <div class="ic-english">"${card.cust[0]}" / "${card.cust[1]}"</div>
+        </div>
+        <div class="ic-expand-icon">▼</div>
+      </div>
+      <div class="ic-details">
+        <div class="ic-arabic">${card.custAr}</div>
+        <div class="ic-divider"></div>
+        <div class="ic-cashier-label">أنت ترد</div>
+        <div class="ic-cashier-eng">"${card.cash}"</div>
+        <div class="ic-cashier-arb">${card.cashAr}</div>
+        <div class="ic-audio-row">
+          <button class="audio-btn" onclick="event.stopPropagation(); speakCard(${card.id},'cust')">🔊 العميل</button>
+          <button class="audio-btn" onclick="event.stopPropagation(); speakCard(${card.id},'cash')">🔊 ردّك</button>
+          <button class="audio-btn" onclick="event.stopPropagation(); speakCard(${card.id},'cash',0.7)">🐢 بطيء</button>
+        </div>
+        <div class="ic-mastery-row">
+          <button class="mastery-btn ${m==='new'?'active-new':''}" onclick="event.stopPropagation(); setMastery(${card.id},'new')">جديد</button>
+          <button class="mastery-btn ${m==='learning'?'active-learning':''}" onclick="event.stopPropagation(); setMastery(${card.id},'learning')">أتعلّم</button>
+          <button class="mastery-btn ${m==='confident'?'active-confident':''}" onclick="event.stopPropagation(); setMastery(${card.id},'confident')">واثق</button>
+          <button class="mastery-btn ${m==='automatic'?'active-automatic':''}" onclick="event.stopPropagation(); setMastery(${card.id},'automatic')">تلقائي</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleCard(id) {
+  const el = document.getElementById('card' + id);
+  el.classList.toggle('expanded');
+}
+
+function setMastery(id, level) {
+  mastery[id] = level;
+  saveMastery();
+  // Re-render the card's mastery buttons
+  const el = document.getElementById('card' + id);
+  if (el) {
+    el.querySelectorAll('.mastery-btn').forEach(btn => {
+      btn.className = 'mastery-btn';
+    });
+    const btns = el.querySelectorAll('.mastery-btn');
+    const levels = ['new','learning','confident','automatic'];
+    const idx = levels.indexOf(level);
+    if (idx >= 0 && btns[idx]) {
+      btns[idx].classList.add('active-' + level);
+    }
+  }
+  updateStats();
+}
+
+function filterCards(query, modId) {
+  const mod = MODULES.find(m => m.id === modId);
+  const cards = getModuleCards(mod);
+  const q = query.toLowerCase();
+  cards.forEach(card => {
+    const el = document.getElementById('card' + card.id);
+    if (!el) return;
+    const text = (card.cust.join(' ') + ' ' + card.cash + ' ' + card.custAr + ' ' + card.cashAr).toLowerCase();
+    el.style.display = text.includes(q) ? 'block' : 'none';
+  });
+}
+
+// ========== ROLEPLAYS ==========
+function openRoleplays() {
+  document.getElementById('navTitle').textContent = 'Roleplays';
+  document.getElementById('navSubtitle').textContent = '20 real conversations';
+  
+  const list = document.getElementById('roleplayList');
+  list.innerHTML = ROLEPLAYS.map((rp, i) => `
+    <div class="roleplay-item" id="rp${i}">
+      <div class="rp-header" onclick="toggleRoleplay(${i})">
+        <div class="rp-num">${i+1}</div>
+        <div class="rp-title">${rp.title}</div>
+        <div class="rp-arrow">▼</div>
+      </div>
+      <div class="rp-body">
+        ${rp.lines.map(l => `
+          <div class="rp-line">
+            <div class="rp-speaker ${l.s}">${l.s === 'customer' ? 'العميل' : 'أنت'}</div>
+            <div class="rp-text">
+              <div class="rp-eng">"${l.en}"</div>
+              <div class="rp-arb">${l.ar}</div>
+            </div>
+          </div>
+        `).join('')}
+        <button class="rp-play-all" onclick="playRoleplay(${i})">▶ تشغيل المحادثة كاملة</button>
+      </div>
+    </div>
+  `).join('');
+  
+  setView('roleplay');
+}
+
+function toggleRoleplay(i) {
+  document.getElementById('rp' + i).classList.toggle('expanded');
+}
+
+function playRoleplay(i) {
+  var rp = ROLEPLAYS[i];
+  var lineIndex = 0;
+  function playNext() {
+    if (lineIndex >= rp.lines.length) return;
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    var cleanText = rp.lines[lineIndex].en.replace(/___/g, '...');
+    var u = new SpeechSynthesisUtterance(cleanText);
+    u.lang = 'en-US';
+    u.rate = 1;
+    u.pitch = 1;
+    var voices = window.speechSynthesis.getVoices();
+    var engVoice = voices.find(function(v) { return v.lang.startsWith('en') && v.localService; })
+      || voices.find(function(v) { return v.lang.startsWith('en'); });
+    if (engVoice) u.voice = engVoice;
+    u.onend = function() {
+      lineIndex++;
+      if (lineIndex < rp.lines.length) {
+        setTimeout(playNext, 400);
+      }
+    };
+    u.onerror = function() {
+      lineIndex++;
+      if (lineIndex < rp.lines.length) {
+        setTimeout(playNext, 400);
+      }
+    };
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(u);
+  }
+  playNext();
+}
+
+// ========== NUMBERS DRILL ==========
+function openDrill() {
+  document.getElementById('navTitle').textContent = 'Numbers Drill';
+  document.getElementById('navSubtitle').textContent = 'Say the price in English';
+  
+  drillShuffled = [...DRILL_PRICES].sort(() => Math.random() - 0.5);
+  drillIndex = 0;
+  renderDrill();
+  setView('drill');
+}
+
+function renderDrill() {
+  const item = drillShuffled[drillIndex];
+  document.getElementById('drillPrice').textContent = item.num;
+  document.getElementById('drillAnswer').textContent = item.en;
+  document.getElementById('drillAnswer').classList.remove('visible');
+  document.getElementById('drillAnswerArb').textContent = item.ar;
+  document.getElementById('drillAnswerArb').classList.remove('visible');
+  document.getElementById('drillProgress').textContent = `${drillIndex + 1} / ${drillShuffled.length}`;
+}
+
+function showDrillAnswer() {
+  document.getElementById('drillAnswer').classList.add('visible');
+  document.getElementById('drillAnswerArb').classList.add('visible');
+}
+
+function playDrillAudio() {
+  const item = drillShuffled[drillIndex];
+  speak(item.en);
+}
+
+function nextDrill() {
+  drillIndex = (drillIndex + 1) % drillShuffled.length;
+  renderDrill();
+}
+
+// ========== FALSE FRIENDS ==========
+function openFalseFriends() {
+  document.getElementById('navTitle').textContent = 'Watch Out!';
+  document.getElementById('navSubtitle').textContent = 'Tricky words';
+  
+  const list = document.getElementById('ffList');
+  list.innerHTML = FALSE_FRIENDS.map(ff => `
+    <div class="ff-card">
+      <div class="ff-pair">
+        <span class="ff-word">${ff.w1}</span>
+        ${ff.w2 ? `<span class="ff-vs">vs</span><span class="ff-word">${ff.w2}</span>` : ''}
+      </div>
+      <div class="ff-meaning">
+        <strong>${ff.w1}</strong> = ${ff.m1}
+        ${ff.w2 ? `<br><strong>${ff.w2}</strong> = ${ff.m2}` : ''}
+        <br><em>${ff.note}</em>
+      </div>
+    </div>
+  `).join('');
+  
+  setView('ff');
+}
+
+// ========== STATS ==========
+function updateStats() {
+  const learned = Object.values(mastery).filter(m => m === 'confident' || m === 'automatic').length;
+  document.getElementById('statLearned').textContent = learned;
+  renderModuleGrid();
+}
+
+// ========== INIT ==========
+function init() {
+  renderEmergency();
+  renderModuleGrid();
+  updateStats();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
+: 0 1px 3px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08);
 
