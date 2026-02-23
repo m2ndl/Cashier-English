@@ -243,9 +243,13 @@ body {
   background: var(--orange-light); border: 1.5px solid var(--orange-accent);
   border-radius: var(--radius-md); padding: 14px;
   margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;
+  direction: rtl;
 }
 .watch-out-banner .wo-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
-.watch-out-banner .wo-text { font-size: 13px; line-height: 1.5; color: #7A5A00; }
+.watch-out-banner .wo-text {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px; line-height: 1.7; color: #7A5A00;
+}
 .watch-out-banner .wo-text strong { color: #5A3F00; }
 
 /* Interaction Card */
@@ -468,7 +472,7 @@ body {
 .ff-meaning {
   font-family: 'Cairo', sans-serif;
   font-size: 13px; color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.7; direction: rtl; text-align: right;
 }
 
 /* ====== BOTTOM NAV ====== */
@@ -553,17 +557,9 @@ body {
       <div class="hero-greeting">مرحبًا! Welcome</div>
       <div class="hero-sub">Master the English you need at the register.<br><span style="font-family:'Cairo',sans-serif;font-size:13px">أتقن الإنجليزية التي تحتاجها عند الكاشير</span></div>
       <div class="hero-stats">
-        <div class="hero-stat">
+        <div class="hero-stat" style="flex:none;padding:12px 28px">
           <span class="num" id="statLearned">0</span>
-          <span class="label">Learned · تعلّمت</span>
-        </div>
-        <div class="hero-stat">
-          <span class="num">120</span>
-          <span class="label">Cards · بطاقة</span>
-        </div>
-        <div class="hero-stat">
-          <span class="num">20</span>
-          <span class="label">Roleplays · حوارات</span>
+          <span class="label">ما تم تعلّمه</span>
         </div>
       </div>
     </div>
@@ -571,7 +567,7 @@ body {
     <!-- Emergency Button -->
     <button class="emergency-btn" onclick="toggleEmergency()">
       <span class="icon">🚨</span>
-      Don't Freeze! <span style="font-family:'Cairo',sans-serif;font-size:14px">لا تتجمّد!</span>
+      <span style="font-family:'Cairo',sans-serif;font-size:16px">عبارات سريعة</span>
     </button>
     <div class="emergency-panel" id="emergencyPanel"></div>
 
@@ -640,8 +636,8 @@ body {
   <div class="ff-view" id="ffView">
     <div class="module-header" style="margin-bottom:16px; background: linear-gradient(135deg, #C97200, var(--orange-accent));">
       <h2>⚠️ Watch Out!</h2>
-      <div class="mh-count" style="font-family:'Cairo',sans-serif;font-size:14px;opacity:0.9">انتبه! كلمات خادعة</div>
-      <div class="mh-count" style="margin-top:4px">Words that trick Arabic speakers</div>
+      <div class="mh-count" style="font-family:'Cairo',sans-serif;font-size:14px;opacity:0.9">كلمات خادعة للمتحدثين بالعربية</div>
+      <div class="mh-count" style="margin-top:4px">١٠ كلمات يجب الانتباه لها</div>
     </div>
     <div id="ffList"></div>
   </div>
@@ -686,26 +682,26 @@ const EMERGENCY = [
 ];
 
 const FALSE_FRIENDS = [
-  { w1: "receipt", m1: "إيصال", w2: "recipe", m2: "وصفة طبخ", note: "A customer asking for a 'receipt' wants the paper proof of payment. 'Recipe' is cooking instructions." },
-  { w1: "change", m1: "الباقي / فكة", w2: "change", m2: "استبدال / تغيير", note: "'Change' at the register means leftover money. 'Change an item' means exchange it." },
-  { w1: "exchange", m1: "استبدال منتج", w2: "refund", m2: "استرجاع مبلغ", note: "Exchange = swap for another item. Refund = get money back." },
-  { w1: "bill", m1: "فاتورة", w2: "bill", m2: "ورقة نقدية", note: "'Can I see the bill?' = the total. 'Do you have a smaller bill?' = banknote." },
-  { w1: "card", m1: "بطاقة", w2: "cart", m2: "عربة تسوق", note: "They sound very similar. Listen carefully: 'card' ends with D, 'cart' ends with T." },
-  { w1: "points", m1: "نقاط ولاء", w2: "discount", m2: "خصم", note: "Points = loyalty rewards to collect. Discount = immediate price reduction." },
-  { w1: "cash back", m1: "سحب نقدي عند الدفع", w2: "", m2: "", note: "NOT a refund. It means the customer wants extra cash added to a card payment. Most supermarkets in Saudi don't offer this." },
-  { w1: "price match", m1: "مطابقة سعر متجر آخر", w2: "", m2: "", note: "Customer wants you to match a cheaper price from another store. Refer to customer service." },
-  { w1: "tap", m1: "تماس (دفع لاسلكي)", w2: "insert", m2: "إدخال البطاقة", note: "Tap = hold card near the machine. Insert = push the chip end into the slot." },
-  { w1: "separate", m1: "افصل (أكياس أو فواتير)", w2: "", m2: "", note: "Could mean separate bags OR separate bills. Ask: 'Separate bags or separate bills?'" },
+  { w1: "receipt", m1: "إيصال", w2: "recipe", m2: "وصفة طبخ", note: "العميل الذي يطلب \"receipt\" يريد ورقة إثبات الشراء. أما \"recipe\" فهي وصفة طبخ." },
+  { w1: "change", m1: "الباقي / فكة", w2: "change", m2: "استبدال / تغيير", note: "\"change\" عند الكاشير تعني باقي المبلغ. لكن \"change an item\" تعني استبدال المنتج." },
+  { w1: "exchange", m1: "استبدال منتج", w2: "refund", m2: "استرجاع مبلغ", note: "Exchange = استبدال بمنتج آخر. Refund = استرجاع المبلغ نقدًا." },
+  { w1: "bill", m1: "فاتورة", w2: "bill", m2: "ورقة نقدية", note: "\"Can I see the bill?\" = المجموع. \"Do you have a smaller bill?\" = ورقة نقدية أصغر." },
+  { w1: "card", m1: "بطاقة", w2: "cart", m2: "عربة تسوق", note: "متشابهتان جدًا في النطق. \"card\" تنتهي بحرف D و\"cart\" تنتهي بحرف T. ركّز في السماع." },
+  { w1: "points", m1: "نقاط ولاء", w2: "discount", m2: "خصم", note: "النقاط = مكافآت تُجمع مع الوقت. الخصم = تخفيض فوري على السعر." },
+  { w1: "cash back", m1: "سحب نقدي عند الدفع", w2: "", m2: "", note: "ليس استرجاعًا. يعني أن العميل يريد سحب مبلغ نقدي إضافي عند الدفع بالبطاقة. معظم السوبرماركتات في السعودية لا تقدم هذه الخدمة." },
+  { w1: "price match", m1: "مطابقة سعر متجر آخر", w2: "", m2: "", note: "العميل يريد منك مطابقة سعر أرخص من متجر آخر. حوّله لخدمة العملاء." },
+  { w1: "tap", m1: "تماس (دفع لاسلكي)", w2: "insert", m2: "إدخال البطاقة", note: "Tap = قرّب البطاقة من الجهاز. Insert = أدخل طرف الشريحة في الفتحة." },
+  { w1: "separate", m1: "افصل (أكياس أو فواتير)", w2: "", m2: "", note: "قد تعني أكياس منفصلة أو فواتير منفصلة. اسأل: \"أكياس منفصلة أم فواتير منفصلة؟\"" },
 ];
 
 const MODULES = [
-  { id: 1, title: "Numbers + Prices", titleAr: "الأرقام والأسعار", icon: "🔢", cards: [1,20], watchOut: "Teens vs tens (13/30, 15/50, 17/70, 18/80) and decimals are the main breakdown points." },
-  { id: 2, title: "Greeting + Starting", titleAr: "الترحيب والبداية", icon: "👋", cards: [21,35], watchOut: "\"card\" vs \"cart\"; bags; \"two bills\" can come early." },
-  { id: 3, title: "Scanning + Bagging", titleAr: "المسح والتعبئة", icon: "🛍️", cards: [36,55], watchOut: "\"Separate\" can mean separate bags or separate bills. Ask which one." },
-  { id: 4, title: "Prices + Discounts", titleAr: "الأسعار والخصومات", icon: "🏷️", cards: [56,70], watchOut: "\"Points\" ≠ \"discount\"; \"price match\" and \"cash back\" are traps—don't say yes." },
-  { id: 5, title: "Payment", titleAr: "الدفع", icon: "💳", cards: [71,90], watchOut: "\"Tap\" vs \"insert\"; declined cards; split payment." },
-  { id: 6, title: "Receipt + Closing", titleAr: "الإيصال والختام", icon: "🧾", cards: [91,105], watchOut: "\"Receipt\" vs \"recipe\"; \"bill\" can mean invoice or banknote." },
-  { id: 7, title: "Problems + Exceptions", titleAr: "المشاكل والاستثناءات", icon: "⚠️", cards: [106,120], watchOut: "Duplicate scan ≠ quantity; returns vs exchange; manager requests." },
+  { id: 1, title: "Numbers + Prices", titleAr: "الأرقام والأسعار", icon: "🔢", cards: [1,20], watchOut: "الأرقام المتشابهة مثل 13/30 و15/50 و17/70 و18/80 والكسور العشرية هي أكثر ما يسبب سوء الفهم." },
+  { id: 2, title: "Greeting + Starting", titleAr: "الترحيب والبداية", icon: "👋", cards: [21,35], watchOut: "انتبه للفرق بين \"card\" (بطاقة) و\"cart\" (عربة). وقد يطلب العميل فاتورتين من البداية." },
+  { id: 3, title: "Scanning + Bagging", titleAr: "المسح والتعبئة", icon: "🛍️", cards: [36,55], watchOut: "كلمة \"separate\" قد تعني أكياس منفصلة أو فواتير منفصلة. اسأل العميل أيهما يقصد." },
+  { id: 4, title: "Prices + Discounts", titleAr: "الأسعار والخصومات", icon: "🏷️", cards: [56,70], watchOut: "\"النقاط\" غير \"الخصم\". وعبارتا \"price match\" و\"cash back\" قد تُربكانك — لا توافق دون فهم." },
+  { id: 5, title: "Payment", titleAr: "الدفع", icon: "💳", cards: [71,90], watchOut: "انتبه للفرق بين \"tap\" (تماس) و\"insert\" (إدخال). وتعامل بهدوء مع البطاقة المرفوضة والدفع المقسّم." },
+  { id: 6, title: "Receipt + Closing", titleAr: "الإيصال والختام", icon: "🧾", cards: [91,105], watchOut: "\"receipt\" (إيصال) تختلف عن \"recipe\" (وصفة طبخ). و\"bill\" قد تعني فاتورة أو ورقة نقدية." },
+  { id: 7, title: "Problems + Exceptions", titleAr: "المشاكل والاستثناءات", icon: "⚠️", cards: [106,120], watchOut: "المسح المزدوج غير الكمية. وانتبه للفرق بين الإرجاع والاستبدال. وطلب المدير لا يعني أنك أخطأت." },
 ];
 
 const CARDS = [
@@ -976,7 +972,8 @@ let currentUtterance = null;
 function speak(text, rate = 1) {
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    var cleanText = text.replace(/___/g, '...');
+    var u = new SpeechSynthesisUtterance(cleanText);
     u.lang = 'en-US';
     u.rate = rate;
     u.pitch = 1;
@@ -1050,7 +1047,7 @@ function toggleEmergency() {
 
 function renderEmergency() {
   const panel = document.getElementById('emergencyPanel');
-  panel.innerHTML = '<h3>🚨 Quick Phrases · عبارات سريعة</h3>' +
+  panel.innerHTML = '<h3>🚨 عبارات سريعة — اضغط للاستماع</h3>' +
     EMERGENCY.map((e, i) => `
       <div class="emergency-phrase" onclick="speakEmergency(${i})">
         <div class="play-icon">▶</div>
@@ -1119,7 +1116,7 @@ function openModule(modId) {
     html += `
       <div class="watch-out-banner">
         <div class="wo-icon">⚠️</div>
-        <div class="wo-text"><strong>Watch Out:</strong> ${mod.watchOut}</div>
+        <div class="wo-text"><strong>انتبه:</strong> ${mod.watchOut}</div>
       </div>
     `;
   }
