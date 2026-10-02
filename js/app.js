@@ -828,7 +828,7 @@
   // Views: Home
   // =====================================================================
   function viewHome() {
-    setBar(`${P.meta.title.ar} · ${P.meta.title.en}`, P.meta.subtitle.ar);
+    setBar(P.meta.title.en, P.meta.subtitle.ar);
     const wk = currentWeek();
     const nx = nextStep();
     const due = srsDue().length;
