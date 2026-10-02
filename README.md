@@ -1,4 +1,4 @@
-# Retail English · إنجليزي التجزئة
+# Retail English
 
 The app is the digital part of **English for Retail Sales Associates**, a six-week blended program for Saudi retail staff (CEFR A1–A2) who serve English-speaking customers. Each week has three parts:
 

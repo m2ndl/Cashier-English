@@ -23,8 +23,8 @@
 window.PROGRAM = {
   meta: {
     id: "retail-english",
-    version: "2.0.2",
-    title: { en: "Retail English", ar: "إنجليزي التجزئة" },
+    version: "2.0.3",
+    title: { en: "Retail English" },
     subtitle: {
       en: "English for retail sales associates",
       ar: "اللغة الإنجليزية لموظفي المبيعات في قطاع التجزئة"
