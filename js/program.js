@@ -23,7 +23,7 @@
 window.PROGRAM = {
   meta: {
     id: "retail-english",
-    version: "2.0.1",
+    version: "2.0.2",
     title: { en: "Retail English", ar: "إنجليزي التجزئة" },
     subtitle: {
       en: "English for retail sales associates",
@@ -964,13 +964,13 @@ window.PROGRAM = {
   // ---------------------------------------------------------------------------
   evaluation: [
     { who: { en: "Two reviewers", ar: "مراجعان" }, what: { en: "Map the exit assessment to the outcomes independently; report agreement (app: Trainer › Alignment check)", ar: "يربطان التقييم الختامي بالمخرجات كلٌّ على حدة، ثم تُحسب نسبة الاتفاق" }, when: { en: "Before the pilot", ar: "قبل التجربة" } },
-    { who: { en: "Learners", ar: "المتدربون" }, what: { en: "Can-do self-assessment and listening check (entry form)", ar: "التقييم الذاتي واختبار الاستماع (نموذج البداية)" }, when: { en: "Week 1", ar: "الأسبوع 1" } },
+    { who: { en: "Learners", ar: "المتدربون" }, what: { en: "Listening check (entry form)", ar: "اختبار الاستماع (نموذج البداية)" }, when: { en: "Week 1", ar: "الأسبوع 1" } },
     { who: { en: "Trainers", ar: "المدربون" }, what: { en: "Diagnostic role-play, two raters, four criteria", ar: "لعب الأدوار التشخيصي بمقيّمَين وأربعة معايير" }, when: { en: "Week 1", ar: "الأسبوع 1" } },
     { who: { en: "Learners", ar: "المتدربون" }, what: { en: "Unit pulse: usefulness and difficulty of each unit", ar: "استطلاع قصير بعد كل وحدة: الفائدة والصعوبة" }, when: { en: "End of each unit", ar: "نهاية كل وحدة" } },
     { who: { en: "Learners and trainers", ar: "المتدربون والمدربون" }, what: { en: "Mission logs reviewed in the workshop", ar: "مراجعة سجلات المهام في الورشة" }, when: { en: "Weekly", ar: "أسبوعيًا" } },
     { who: { en: "Program team", ar: "فريق البرنامج" }, what: { en: "App usage: study time, steps completed, unit check scores (exported records)", ar: "بيانات الاستخدام: وقت الدراسة والخطوات ونتائج الوحدات (سجلات مُصدّرة)" }, when: { en: "Continuous", ar: "مستمر" } },
     { who: { en: "Trainers", ar: "المدربون" }, what: { en: "Exit role-plays, two raters, the same four criteria", ar: "لعب الأدوار الختامي بمقيّمَين وبالمعايير الأربعة نفسها" }, when: { en: "Week 6", ar: "الأسبوع 6" } },
-    { who: { en: "Learners", ar: "المتدربون" }, what: { en: "Listening check (exit form), self-assessment, end-of-program survey", ar: "اختبار الاستماع (نموذج النهاية) والتقييم الذاتي واستبانة نهاية البرنامج" }, when: { en: "Week 6", ar: "الأسبوع 6" } },
+    { who: { en: "Learners", ar: "المتدربون" }, what: { en: "Listening check (exit form) and end-of-program survey", ar: "اختبار الاستماع (نموذج النهاية) واستبانة نهاية البرنامج" }, when: { en: "Week 6", ar: "الأسبوع 6" } },
     { who: { en: "Store supervisors", ar: "مشرفو المتاجر" }, what: { en: "Short interview on English use at work; compare with a waiting-list group where possible", ar: "مقابلة قصيرة عن استخدام الإنجليزية في العمل، مع المقارنة بمجموعة انتظار إن أمكن" }, when: { en: "Week 6 and 4 weeks later", ar: "الأسبوع 6 وبعد 4 أسابيع" } }
   ],
 

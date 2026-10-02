@@ -144,12 +144,6 @@
     assess: { ar: 'التحقق من التعلّم', en: 'Checking learning' },
     transfer: { ar: 'النقل إلى العمل', en: 'Transfer to work' }
   };
-  const SELF_SCALE = [
-    { v: 1, ar: 'لا أستطيع بعد' },
-    { v: 2, ar: 'بمساعدة' },
-    { v: 3, ar: 'أستطيع' },
-    { v: 4, ar: 'بسهولة' }
-  ];
   const AGREE_SCALE = [
     { v: 1, ar: 'لا أوافق بشدة' },
     { v: 2, ar: 'لا أوافق' },
@@ -167,8 +161,6 @@
       v: 2,
       profile: { name: '', store: '', startedAt: null },
       settings: { ar: true, rate: 1, accent: 'mix', theme: 'auto', mic: true },
-      welcomeDone: false,
-      self: { entry: null, exit: null },
       lc: { entry: null, exit: null },
       steps: {},
       checks: {},
@@ -205,13 +197,7 @@
       if (['mix', 'us', 'gb'].includes(t.accent)) d.settings.accent = t.accent;
       if (['auto', 'light', 'dark'].includes(t.theme)) d.settings.theme = t.theme;
     }
-    d.welcomeDone = r.welcomeDone === true;
     ['entry', 'exit'].forEach(f => {
-      const se = isObj(r.self) ? r.self[f] : null;
-      if (isObj(se) && P.outcomes.every(o => int(se[o.id], 1, 4))) {
-        d.self[f] = { at: num(se.at) };
-        P.outcomes.forEach(o => { d.self[f][o.id] = se[o.id]; });
-      }
       const lc = isObj(r.lc) ? r.lc[f] : null;
       if (isObj(lc) && int(lc.total, 1, 100) && int(lc.score, 0, lc.total) !== null) {
         d.lc[f] = {
@@ -607,6 +593,12 @@
   // Arabic text from program.js may mark English fragments with backticks.
   const rich = s => esc(s).replace(/`([^`]+)`/g, '<bdi class="en" lang="en" dir="ltr">$1</bdi>');
   const plain = s => String(s || '').replace(/`/g, '');
+  // A short preview that ends on a whole word.
+  function preview(s, max) {
+    const t = plain(s);
+    if (t.length <= max) return t;
+    return t.slice(0, max).replace(/\s+\S*$/, '').replace(/[\s:،,.؛;]+$/, '') + '…';
+  }
   const enSpan = (s, cls = '') => `<span class="en ${cls}" lang="en" dir="ltr">${esc(s)}</span>`;
   const bi = o => `${esc(o.ar)} ${enSpan(o.en, 'small muted')}`;
   const audioBtns = (text, role = 'k', slow = true) =>
@@ -741,15 +733,15 @@
     ['', viewHome], ['units', viewUnits], ['outcomes', viewOutcomes], ['unit/:u', viewUnit], ['unit/:u/:step', viewStep],
     ['practice', viewPractice], ['numbers', viewNumbers], ['review', viewReview], ['dialogues', viewDialogues],
     ['dialogue/:u/:which', viewDialogue], ['watch', viewWatch],
-    ['progress', viewProgress], ['record', viewRecord], ['settings', viewSettings], ['welcome', viewWelcome],
-    ['final', viewFinal], ['self/:form', viewSelf], ['lc/:form', viewListeningCheck], ['survey', viewSurvey],
+    ['progress', viewProgress], ['record', viewRecord], ['settings', viewSettings],
+    ['final', viewFinal], ['lc/:form', viewListeningCheck], ['survey', viewSurvey],
     ['trainer', viewTrainer], ['trainer/design', viewDesign], ['trainer/matrix', viewMatrix], ['trainer/guide/:u', viewGuide],
     ['trainer/cards', viewCards], ['trainer/rate', viewRate], ['trainer/ratings', viewRatings], ['trainer/align', viewAlign]
   ];
   const PARENT = {
     units: '', outcomes: 'units', unit: 'units', practice: '', numbers: 'practice', review: 'practice', dialogues: 'practice',
-    dialogue: 'dialogues', watch: 'practice', progress: '', record: 'progress', settings: '', welcome: '', final: 'units',
-    self: 'final', lc: 'final', survey: 'final', trainer: 'settings'
+    dialogue: 'dialogues', watch: 'practice', progress: '', record: 'progress', settings: '', final: 'units',
+    lc: 'final', survey: 'final', trainer: 'settings'
   };
   function parentOf(path) {
     const parts = path.split('/');
@@ -760,7 +752,7 @@
   function tabOf(path) {
     const p = path.split('/')[0];
     if (!p) return 'home';
-    if (['units', 'outcomes', 'unit', 'final', 'self', 'lc', 'survey'].includes(p)) return 'units';
+    if (['units', 'outcomes', 'unit', 'final', 'lc', 'survey'].includes(p)) return 'units';
     if (['practice', 'numbers', 'review', 'dialogues', 'dialogue', 'watch'].includes(p)) return 'practice';
     if (['progress', 'record'].includes(p)) return 'progress';
     return '';
@@ -837,26 +829,6 @@
   // =====================================================================
   function viewHome() {
     setBar(`${P.meta.title.ar} · ${P.meta.title.en}`, P.meta.subtitle.ar);
-    if (!S.welcomeDone) {
-      view.innerHTML = `
-        <div class="stack-lg">
-          <section class="hero">
-            <p class="small" style="opacity:.85">${esc(P.meta.weeks)} أسابيع · ${esc(P.meta.hours)} ساعة · ${esc(P.meta.mode.ar)}</p>
-            <h2>${esc(P.meta.subtitle.ar)}</h2>
-            <p class="en" lang="en" dir="ltr" style="text-align:left">${esc(P.meta.subtitle.en)}</p>
-          </section>
-          <div class="card stack">
-            <h3>ماذا ستتعلم؟</h3>
-            <ul class="outcomes">${P.outcomes.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
-            <a class="btn block" href="#/welcome">ابدأ البرنامج</a>
-          </div>
-          <button class="card tight row" type="button" data-help>
-            <span class="unit-badge">${icon('help')}</span>
-            <span class="grow"><strong>في العمل الآن؟</strong><br><span class="muted small">عبارات سريعة تسمعها وتعرضها للعميل</span></span>
-          </button>
-        </div>`;
-      return;
-    }
     const wk = currentWeek();
     const nx = nextStep();
     const due = srsDue().length;
@@ -871,7 +843,7 @@
         <a class="card unit-card" href="#/unit/${nx.unit.id}/${nx.step.id}">
           <span class="unit-badge">${icon(nx.step.icon)}</span>
           <span class="grow">
-            <span class="muted small">تابع من حيث توقفت · الوحدة ${unitIndex(nx.unit.id) + 1}</span><br>
+            <span class="muted small">${Object.keys(S.steps).length ? 'تابع من حيث توقفت' : 'ابدأ هنا'} · الوحدة ${unitIndex(nx.unit.id) + 1}</span><br>
             <strong>${esc(nx.step.ar)}</strong> <span class="muted small">— ${esc(nx.unit.title.ar)}</span>
           </span>
           <span class="chev">${icon('next')}</span>
@@ -880,7 +852,7 @@
       cards += `
         <a class="card unit-card" href="#/final">
           <span class="unit-badge done">${icon('award')}</span>
-          <span class="grow"><strong>أنهيت الوحدات! حان وقت التقييم الختامي</strong><br><span class="muted small">اختبار الاستماع والتقييم الذاتي والاستبانة</span></span>
+          <span class="grow"><strong>أنهيت الوحدات! حان وقت التقييم الختامي</strong><br><span class="muted small">اختبار الاستماع الختامي والاستبانة</span></span>
           <span class="chev">${icon('next')}</span>
         </a>`;
     }
@@ -896,7 +868,7 @@
       cards += `
         <a class="card unit-card" href="#/unit/${weekUnit.id}/mission">
           <span class="unit-badge">${icon('briefcase')}</span>
-          <span class="grow"><strong>مهمة هذا الأسبوع في العمل</strong><br><span class="muted small">${esc(plain(weekUnit.mission.ar).slice(0, 90))}…</span></span>
+          <span class="grow"><strong>مهمة هذا الأسبوع في العمل</strong><br><span class="muted small">${esc(preview(weekUnit.mission.ar, 90))}</span></span>
           <span class="chev">${icon('next')}</span>
         </a>`;
     }
@@ -926,132 +898,6 @@
           <span class="grow"><strong>في العمل الآن؟</strong><br><span class="muted small">عبارات سريعة تسمعها وتعرضها للعميل</span></span>
         </button>
       </div>`;
-  }
-
-  // =====================================================================
-  // Welcome (first run): intro, profile, self-assessment, listening check
-  // =====================================================================
-  function viewWelcome() {
-    setBar('مرحبًا بك', P.meta.title.ar);
-    let stage = 0;
-    function finish() {
-      S.welcomeDone = true;
-      if (!S.profile.startedAt) S.profile.startedAt = dayKey();
-      save();
-    }
-    function draw() {
-      stopAll();
-      if (stage === 0) {
-        view.innerHTML = `
-          <div class="stack-lg">
-            <section class="hero">
-              <h2>${esc(P.meta.subtitle.ar)}</h2>
-              <p class="en" lang="en" dir="ltr" style="text-align:left">${esc(P.meta.subtitle.en)}</p>
-              <div class="meta"><span class="pill">${P.meta.weeks} أسابيع</span><span class="pill">${P.meta.hours} ساعة</span><span class="pill">${esc(P.meta.mode.ar)}</span></div>
-            </section>
-            <div class="card stack">
-              <h3>في نهاية البرنامج ستستطيع أن:</h3>
-              <ul class="outcomes">${P.outcomes.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
-            </div>
-            <div class="card stack">
-              <h3>كيف يعمل البرنامج كل أسبوع؟</h3>
-              ${P.meta.weeklyPattern.map(w => `<div class="row"><span class="pill brand num">${w.hours} س</span><span>${esc(w.ar)}</span></div>`).join('')}
-            </div>
-            <button class="btn block" type="button" data-act="next">لنبدأ</button>
-          </div>`;
-      } else if (stage === 1) {
-        view.innerHTML = `
-          <div class="stack-lg">
-            <div class="card stack">
-              <h3>عرّفنا بنفسك (اختياري)</h3>
-              <label class="field">الاسم<input class="input" id="pName" autocomplete="name" value="${esc(S.profile.name)}"></label>
-              <label class="field">المتجر أو القسم<input class="input" id="pStore" value="${esc(S.profile.store)}"></label>
-              <p class="muted small">تبقى بياناتك على هذا الجهاز فقط.</p>
-            </div>
-            <button class="btn block" type="button" data-act="next">التالي</button>
-          </div>`;
-      } else if (stage === 2) {
-        view.innerHTML = `<div id="selfHost"></div>`;
-        selfForm($('#selfHost'), 'entry', () => { stage = 3; draw(); });
-      } else if (stage === 3) {
-        view.innerHTML = `
-          <div class="stack-lg">
-            <div class="card stack">
-              <h3>اختبار الاستماع الأولي</h3>
-              <p>عشرة أسئلة قصيرة: تكتب أسعارًا تسمعها، وتختار ما يريده العميل. هذا الاختبار يقيس نقطة البداية فقط، ولا يؤثر على شيء.</p>
-              <p class="muted small">ستعيده في نهاية البرنامج بجمل جديدة لنرى تقدمك.</p>
-            </div>
-            <button class="btn block" type="button" data-act="lc">ابدأ الاختبار</button>
-            <button class="btn ghost block" type="button" data-act="skip">لاحقًا</button>
-          </div>`;
-      } else if (stage === 4) {
-        view.innerHTML = `<div id="lcHost"></div>`;
-        lcRunner($('#lcHost'), 'entry', () => { stage = 5; draw(); });
-      } else {
-        finish();
-        view.innerHTML = `
-          <div class="stack-lg center">
-            <div class="empty" style="color:var(--good)">${icon('award')}</div>
-            <h2>أنت جاهز!</h2>
-            <p>ابدأ بالوحدة الأولى. خصص نحو 20 دقيقة يوميًا، واحضر ورشة الأسبوع.</p>
-            <a class="btn block" href="#/unit/${UNITS[0].id}">ابدأ الوحدة الأولى</a>
-            <a class="btn ghost block" href="#/">الرئيسية</a>
-          </div>`;
-      }
-      window.scrollTo(0, 0);
-    }
-    // #view outlives this screen, so the listener is removed when the route changes.
-    const onClick = e => {
-      const a = e.target.closest('[data-act]');
-      if (!a) return;
-      if (a.dataset.act === 'next' && stage < 2) {
-        if (stage === 1) {
-          S.profile.name = $('#pName').value.trim().slice(0, 60);
-          S.profile.store = $('#pStore').value.trim().slice(0, 80);
-          save();
-        }
-        stage++; draw();
-      } else if (a.dataset.act === 'lc' && stage === 3) { stage = 4; draw(); }
-      else if (a.dataset.act === 'skip' && stage === 3) { stage = 5; draw(); }
-    };
-    view.addEventListener('click', onClick);
-    onLeave(() => view.removeEventListener('click', onClick));
-    draw();
-  }
-
-  // Self-assessment against the program outcomes (entry and exit).
-  function selfForm(host, form, done) {
-    const prev = S.self[form] || {};
-    host.innerHTML = `
-      <div class="stack-lg">
-        <div class="card stack">
-          <h3>${form === 'entry' ? 'التقييم الذاتي في البداية' : 'التقييم الذاتي في النهاية'}</h3>
-          <p class="muted small">إلى أي حد تستطيع فعل ما يلي بالإنجليزية؟ لا توجد إجابة خاطئة.</p>
-        </div>
-        ${P.outcomes.map(o => `
-          <fieldset class="card stack" style="border:1px solid var(--line)">
-            <legend class="sr-only">${esc(o.id)}</legend>
-            <p><span class="pill brand">${esc(o.id)}</span> ${esc(o.ar)}</p>
-            <div class="scale">${SELF_SCALE.map(s => `
-              <label><input type="radio" name="${o.id}" value="${s.v}" ${prev[o.id] === s.v ? 'checked' : ''}><span>${esc(s.ar)}</span></label>`).join('')}
-            </div>
-          </fieldset>`).join('')}
-        <button class="btn block" type="button" data-act="save-self">حفظ</button>
-      </div>`;
-    $('[data-act="save-self"]', host).addEventListener('click', e => {
-      if (e.currentTarget.disabled) return;
-      const out = { at: Date.now() };
-      let missing = 0;
-      P.outcomes.forEach(o => {
-        const c = $(`input[name="${o.id}"]:checked`, host);
-        if (c) out[o.id] = +c.value; else missing++;
-      });
-      if (missing) { toast('أجب عن جميع العبارات من فضلك'); return; }
-      e.currentTarget.disabled = true;
-      S.self[form] = out;
-      save();
-      done();
-    });
   }
 
   // Listening check runner (entry and exit forms). Test conditions: two plays per item, no feedback until the end.
@@ -1149,7 +995,6 @@
   function viewUnits() {
     setBar('الوحدات', `${P.meta.weeks} أسابيع · ${P.meta.hours} ساعة`);
     const wk = currentWeek();
-    const entryDone = S.self.entry && S.lc.entry;
     view.innerHTML = `
       <div class="stack-lg">
         <a class="card unit-card" href="#/outcomes">
@@ -1157,10 +1002,10 @@
           <span class="grow"><strong>مخرجات البرنامج</strong><br><span class="muted small">ماذا ستستطيع أن تفعل، وكيف يُقيَّم كل مخرج</span></span>
           <span class="chev">${icon('next')}</span>
         </a>
-        ${entryDone ? '' : `
-        <a class="card unit-card" href="${S.self.entry ? '#/lc/entry' : '#/self/entry'}">
-          <span class="unit-badge">${icon('clipboard')}</span>
-          <span class="grow"><strong>تقييم البداية</strong><br><span class="muted small">${S.self.entry ? 'بقي اختبار الاستماع الأولي' : 'التقييم الذاتي واختبار الاستماع'}</span></span>
+        ${S.lc.entry ? '' : `
+        <a class="card unit-card" href="#/lc/entry">
+          <span class="unit-badge">${icon('headphones')}</span>
+          <span class="grow"><strong>اختبار الاستماع الأولي</strong><br><span class="muted small">10 أسئلة قصيرة لقياس نقطة البداية</span></span>
           <span class="chev">${icon('next')}</span>
         </a>`}
         <div class="stack">
@@ -1171,7 +1016,7 @@
             <a class="card unit-card" href="#/unit/${u.id}">
               <span class="unit-badge ${done ? 'done' : ''}">${done ? icon('check') : icon(u.icon)}</span>
               <span class="grow stack" style="gap:4px">
-                <span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}${u.week === wk && S.welcomeDone ? ' · <strong style="color:var(--brand)">هذا الأسبوع</strong>' : ''}</span>
+                <span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}${u.week === wk ? ' · <strong style="color:var(--brand)">هذا الأسبوع</strong>' : ''}</span>
                 <strong>${esc(u.title.ar)}</strong>
                 ${enSpan(u.title.en, 'small muted')}
                 ${progressBar(pct(unitStepsDone(u.id), STEPS.length))}
@@ -1183,7 +1028,7 @@
         </div>
         <a class="card unit-card" href="#/final">
           <span class="unit-badge">${icon('award')}</span>
-          <span class="grow"><strong>التقييم الختامي</strong><br><span class="muted small">الأسبوع ${P.meta.weeks}: اختبار الاستماع، التقييم الذاتي، الاستبانة، ولعب الأدوار مع المدربين</span></span>
+          <span class="grow"><strong>التقييم الختامي</strong><br><span class="muted small">الأسبوع ${P.meta.weeks}: اختبار الاستماع والاستبانة ولعب الأدوار مع المدربين</span></span>
           <span class="chev">${icon('next')}</span>
         </a>
       </div>`;
@@ -2165,7 +2010,6 @@
   function viewProgress() {
     setBar('تقدّمي', 'My progress');
     const passed = UNITS.filter(u => unitPassed(u.id)).length;
-    const selfMean = f => S.self[f] ? (P.outcomes.reduce((n, o) => n + (S.self[f][o.id] || 0), 0) / P.outcomes.length) : null;
     const wkMinutes = [];
     const start = S.profile.startedAt || addDays(dayKey(), -7 * (P.meta.weeks - 1));
     for (let w = 0; w < P.meta.weeks; w++) {
@@ -2189,19 +2033,6 @@
             <div class="box"><div class="small muted">النهاية</div><div class="v">${S.lc.exit ? `${S.lc.exit.score}/${S.lc.exit.total}` : '—'}</div></div>
           </div>
           ${!S.lc.entry ? '<a class="btn soft small" href="#/lc/entry">أجرِ اختبار البداية</a>' : ''}
-        </div>
-
-        <div class="card stack">
-          <h3>التقييم الذاتي ${enSpan('Can-do self-assessment', 'small muted')}</h3>
-          ${S.self.entry ? `
-          <div class="bars">${P.outcomes.map(o => {
-            const a = (S.self.entry || {})[o.id] || 0, b = (S.self.exit || {})[o.id] || 0;
-            return `<div class="bar-row"><span>${esc(o.short.ar)}</span>
-              <div class="stack" style="gap:3px"><div class="progress"><span style="width:${a * 25}%;background:var(--ink-3)"></span></div>${S.self.exit ? `<div class="progress"><span style="width:${b * 25}%"></span></div>` : ''}</div>
-              <span class="v" dir="ltr">${a}${S.self.exit ? ` → ${b}` : ''}</span></div>`;
-          }).join('')}</div>
-          <p class="muted small">الرمادي: البداية${S.self.exit ? ' · الأخضر: النهاية' : ''} (من 4). المتوسط: <span dir="ltr">${selfMean('entry').toFixed(1)}${S.self.exit ? ` → ${selfMean('exit').toFixed(1)}` : ''}</span></p>`
-          : '<a class="btn soft small" href="#/self/entry">أجرِ التقييم الذاتي</a>'}
         </div>
 
         <div class="card stack">
@@ -2237,8 +2068,6 @@
     lines.push(`Started: ${S.profile.startedAt || '—'} · Today: ${dayKey()}`);
     UNITS.forEach((u, i) => lines.push(`Unit ${i + 1} ${u.title.en}: steps ${unitStepsDone(u.id)}/${STEPS.length}, check ${checkBest(u.id) != null ? checkBest(u.id) + '%' : '—'}, mission ${S.missions[u.id] ? 'done' : '—'}`));
     lines.push(`Listening check: entry ${S.lc.entry ? S.lc.entry.score + '/' + S.lc.entry.total : '—'}, exit ${S.lc.exit ? S.lc.exit.score + '/' + S.lc.exit.total : '—'}`);
-    const sm = f => S.self[f] ? (P.outcomes.reduce((n, o) => n + (S.self[f][o.id] || 0), 0) / P.outcomes.length).toFixed(1) : '—';
-    lines.push(`Self-assessment (mean of 4): entry ${sm('entry')}, exit ${sm('exit')}`);
     lines.push(`Study time: ${minutesTotal()} min over ${daysActive()} days`);
     return lines.join('\n');
   }
@@ -2255,7 +2084,6 @@
 
   function viewRecord() {
     setBar('سجل التعلّم', 'Learning record');
-    const sm = f => S.self[f] ? (P.outcomes.reduce((n, o) => n + (S.self[f][o.id] || 0), 0) / P.outcomes.length).toFixed(1) : '—';
     view.innerHTML = `
       <div class="stack-lg">
         <div class="card stack" id="record">
@@ -2276,7 +2104,6 @@
           </table></div>
           <table class="plain">
             <tr><th>اختبار الاستماع</th><td class="num">البداية ${S.lc.entry ? `${S.lc.entry.score}/${S.lc.entry.total}` : '—'} · النهاية ${S.lc.exit ? `${S.lc.exit.score}/${S.lc.exit.total}` : '—'}</td></tr>
-            <tr><th>التقييم الذاتي (من 4)</th><td class="num"><span dir="ltr">${sm('entry')} → ${sm('exit')}</span></td></tr>
             <tr><th>وقت الدراسة</th><td class="num">${minutesTotal()} دقيقة · ${daysActive()} يومًا</td></tr>
           </table>
           <p class="muted small">يوضح هذا السجل نشاط التطبيق فقط. تحقق المخرجات الشفهية يُقرَّر في لعب الأدوار الختامي الذي يقيّمه مدربان.</p>
@@ -2310,24 +2137,17 @@
     view.innerHTML = `
       <div class="stack-lg">
         <div class="card stack">
-          <p>في نهاية البرنامج تقيس ثلاثة أشياء في التطبيق، ثم تؤدي لعب الأدوار الختامي مع مدربين اثنين.</p>
+          <p>في نهاية البرنامج تؤدي اختبار الاستماع الختامي وتجيب عن الاستبانة في التطبيق، ثم تؤدي لعب الأدوار الختامي مع مدربين اثنين.</p>
           ${UNITS.every(u => unitPassed(u.id)) ? '' : `<p class="pill amber">أكمل اختبارات الوحدات أولًا إن أمكن (${UNITS.filter(u => unitPassed(u.id)).length}/${UNITS.length})</p>`}
         </div>
         <div class="stack">
-          ${item('#/self/exit', 'clipboard', '1. التقييم الذاتي', 'المخرجات الستة من جديد', !!S.self.exit)}
-          ${item('#/lc/exit', 'headphones', '2. اختبار الاستماع الختامي', 'نموذج موازٍ بجمل جديدة', !!S.lc.exit)}
-          ${item('#/survey', 'star', '3. استبانة نهاية البرنامج', 'رأيك يساعدنا على تطوير البرنامج', !!S.survey)}
-          ${item('#/record', 'award', '4. سجل التعلّم', 'شاركه مع المدرب', false)}
+          ${item('#/lc/exit', 'headphones', '1. اختبار الاستماع الختامي', 'نموذج موازٍ بجمل جديدة', !!S.lc.exit)}
+          ${item('#/survey', 'star', '2. استبانة نهاية البرنامج', 'رأيك يساعدنا على تطوير البرنامج', !!S.survey)}
+          ${item('#/record', 'award', '3. سجل التعلّم', 'شاركه مع المدرب', false)}
         </div>
         <div class="note brand"><strong>لعب الأدوار الختامي:</strong> ثلاثة مواقف جديدة لم تتدرب عليها حرفيًا، يقيّمها مدربان بالمعايير الأربعة نفسها التي استُخدمت في التقييم التشخيصي.</div>
         <p class="muted small">${P.rubric.criteria.map(c => esc(c.ar)).join(' · ')}</p>
       </div>`;
-  }
-
-  function viewSelf({ form }) {
-    if (!['entry', 'exit'].includes(form)) { redirect('#/final'); return; }
-    setBar(form === 'entry' ? 'التقييم الذاتي: البداية' : 'التقييم الذاتي: النهاية', 'Self-assessment');
-    selfForm(view, form, () => { toast('حُفظ التقييم الذاتي'); go(form === 'entry' ? (S.lc.entry ? '#/units' : '#/lc/entry') : '#/final'); });
   }
 
   function viewListeningCheck({ form }) {
@@ -2940,6 +2760,7 @@
     $('.skip').addEventListener('click', e => { e.preventDefault(); view.focus(); });
     $('#helpBtn').addEventListener('click', openHelp);
     applySettings();
+    if (!S.profile.startedAt) { S.profile.startedAt = dayKey(); save(); }
     window.addEventListener('hashchange', render);
     render();
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
