@@ -1,0 +1,2787 @@
+/* Retail English — app logic. Plain JavaScript, no build step, no dependencies.
+   All program content comes from js/program.js (window.PROGRAM). */
+(function () {
+  'use strict';
+
+  const P = window.PROGRAM;
+  if (!P) return;
+
+  // =====================================================================
+  // Utilities
+  // =====================================================================
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pad = n => String(n).padStart(2, '0');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const pct = (a, b) => (b ? Math.round((100 * a) / b) : 0);
+
+  const dayKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const addDays = (key, n) => { const d = new Date(key + 'T00:00:00'); d.setDate(d.getDate() + n); return dayKey(d); };
+  const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+  function fmtDate(v) {
+    if (!v) return '—';
+    const d = typeof v === 'number' ? new Date(v) : new Date(String(v).length === 10 ? v + 'T00:00:00' : v);
+    try { return d.toLocaleDateString('ar', { day: 'numeric', month: 'long', year: 'numeric', calendar: 'gregory', numberingSystem: 'latn' }); }
+    catch (e) { return dayKey(d); }
+  }
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function hash(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
+  function shuffle(arr, rand = Math.random) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  const pick = (arr, rand = Math.random) => arr[Math.floor(rand() * arr.length)];
+  const uniq = arr => Array.from(new Set(arr));
+
+  // =====================================================================
+  // Icons (24px line icons)
+  // =====================================================================
+  const IC = {
+    home: '<path d="M3 11 12 4l9 7"/><path d="M5.5 9.5V20H10v-5.5h4V20h4.5V9.5"/>',
+    book: '<path d="M12 6.5c-2-1.5-5-2-8-1.5v14c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5z"/><path d="M12 6.5V20.5"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+    chart: '<path d="M4 20h16"/><path d="M7 16v-5"/><path d="M12 16V7"/><path d="M17 16V9"/>',
+    back: '<path d="M9 5l7 7-7 7"/>',
+    next: '<path d="M15 5l-7 7 7 7"/>',
+    down: '<path d="M6 9l6 6 6-6"/>',
+    help: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/><path d="M6 6l3.5 3.5M14.5 14.5 18 18M18 6l-3.5 3.5M9.5 14.5 6 18"/>',
+    settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    volume: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a7.5 7.5 0 0 1 0 11"/>',
+    slow: '<path d="M4 17a8 8 0 1 1 16 0"/><path d="M12 17l-4-4.5"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    play: '<path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>',
+    stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" stroke="none"/>',
+    refresh: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5V9h-4.5"/>',
+    lock: '<rect x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    download: '<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/>',
+    upload: '<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19.5h14"/>',
+    print: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v6H7z"/>',
+    share: '<circle cx="17.5" cy="5.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/><path d="M8.7 10.8l6.6-4M8.7 13.2l6.6 4"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4"/><path d="M17.5 14.2A6 6 0 0 1 21 20"/>',
+    chat: '<path d="M4 5.5h16v10H10l-4.5 4v-4H4z"/>',
+    complaint: '<path d="M4 5.5h16v10H10l-4.5 4v-4H4z"/><path d="M12 8v3.5M12 13.5h.01"/>',
+    list: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="17.5" r="1" fill="currentColor"/>',
+    headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.5"/><rect x="16.5" y="14" width="4" height="6" rx="1.5"/>',
+    layers: '<path d="M12 4 21 8.5l-9 4.5-9-4.5z"/><path d="M3 13l9 4.5 9-4.5"/>',
+    bolt: '<path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12z"/>',
+    clipboard: '<rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 13l2.5 2.5 4.5-4.5"/>',
+    briefcase: '<rect x="3" y="7.5" width="18" height="12.5" rx="2"/><path d="M9 7.5v-2A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5v2"/><path d="M3 13h18"/>',
+    info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.5h.01"/>',
+    alert: '<path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5"/><path d="M12 17.2h.01"/>',
+    hash: '<path d="M5 9h15M4 15h15M10 3.5 8 20.5M16 3.5l-2 17"/>',
+    cards: '<rect x="3.5" y="7" width="13" height="13" rx="2"/><path d="M8 3.5h10.5a2 2 0 0 1 2 2V16"/>',
+    flag: '<path d="M5 21V4"/><path d="M5 4.5h12l-2.5 4 2.5 4H5"/>',
+    grid: '<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 3.5v17M14.5 3.5v17"/>',
+    pen: '<path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M14.5 7.5l3 3"/>',
+    award: '<circle cx="12" cy="9" r="5.5"/><path d="M8.8 13.5 7.5 21l4.5-2.5 4.5 2.5-1.3-7.5"/>',
+    eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+    wave: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0"/><path d="M9 9.5h.01M15 9.5h.01"/>',
+    map: '<path d="M9 4.5 3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5z"/><path d="M9 4.5v13M15 6.5v13"/>',
+    tag: '<path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.5 1.5 0 0 1 0 2.1l-6.4 6.4a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.5"/>',
+    card: '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>',
+    swap: '<path d="M4 8h14l-3.5-3.5"/><path d="M20 16H6l3.5 3.5"/>',
+    star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.9l-5.25 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
+    trash: '<path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/>',
+    copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5A1.5 1.5 0 0 0 14 3.5H5A1.5 1.5 0 0 0 3.5 5v9A1.5 1.5 0 0 0 5 15.5h3.5"/>'
+  };
+  const icon = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[name] || IC.info}</svg>`;
+
+  // =====================================================================
+  // Content lookups
+  // =====================================================================
+  const UNITS = P.units;
+  const PH = {};
+  UNITS.forEach(u => u.phrases.forEach(p => { p.unit = u.id; PH[p.id] = p; }));
+  const PLO = {};
+  P.outcomes.forEach(o => { PLO[o.id] = o; });
+  const ASSESS = {};
+  P.assessments.forEach(a => { ASSESS[a.id] = a; });
+  const unitById = id => UNITS.find(u => u.id === id);
+  const unitIndex = id => UNITS.findIndex(u => u.id === id);
+
+  const STEPS = [
+    { id: 'context', ar: 'السياق والكلمات', en: 'Context and words', icon: 'info', strand: 'lfl', cycle: 'field' },
+    { id: 'model', ar: 'الحوار النموذجي', en: 'Model conversation', icon: 'chat', strand: 'mfi', cycle: 'model' },
+    { id: 'phrases', ar: 'العبارات المفتاحية', en: 'Key phrases', icon: 'list', strand: 'lfl', cycle: 'model' },
+    { id: 'listen', ar: 'افهم العميل', en: 'Understand the customer', icon: 'headphones', strand: 'mfi', cycle: 'model' },
+    { id: 'build', ar: 'ابنِ الحوار', en: 'Build the conversation', icon: 'layers', strand: 'mfo', cycle: 'joint' },
+    { id: 'roleplay', ar: 'تقمّص الدور', en: 'Role-play', icon: 'mic', strand: 'mfo', cycle: 'independent' },
+    { id: 'speed', ar: 'جولة السرعة', en: 'Speed round', icon: 'bolt', strand: 'flu', cycle: 'independent' },
+    { id: 'check', ar: 'اختبار الوحدة', en: 'Unit check', icon: 'clipboard', strand: 'assess', cycle: 'assess' },
+    { id: 'mission', ar: 'مهمة في العمل', en: 'Mission at work', icon: 'briefcase', strand: 'mfo', cycle: 'transfer' }
+  ];
+  const STRAND = {
+    mfi: { ar: 'مدخلات ذات معنى', en: 'Meaning-focused input' },
+    mfo: { ar: 'مخرجات ذات معنى', en: 'Meaning-focused output' },
+    lfl: { ar: 'تعلّم لغوي مركّز', en: 'Language-focused learning' },
+    flu: { ar: 'تنمية الطلاقة', en: 'Fluency development' },
+    assess: { ar: 'تقييم تكويني', en: 'Formative assessment' }
+  };
+  const CYCLE = {
+    field: { ar: 'بناء السياق', en: 'Building the field' },
+    model: { ar: 'النموذج والتحليل', en: 'Modelling and deconstruction' },
+    joint: { ar: 'البناء المشترك', en: 'Joint construction' },
+    independent: { ar: 'البناء المستقل', en: 'Independent construction' },
+    assess: { ar: 'التحقق من التعلّم', en: 'Checking learning' },
+    transfer: { ar: 'النقل إلى العمل', en: 'Transfer to work' }
+  };
+  const SELF_SCALE = [
+    { v: 1, ar: 'لا أستطيع بعد' },
+    { v: 2, ar: 'بمساعدة' },
+    { v: 3, ar: 'أستطيع' },
+    { v: 4, ar: 'بسهولة' }
+  ];
+  const AGREE_SCALE = [
+    { v: 1, ar: 'لا أوافق بشدة' },
+    { v: 2, ar: 'لا أوافق' },
+    { v: 3, ar: 'محايد' },
+    { v: 4, ar: 'أوافق' },
+    { v: 5, ar: 'أوافق بشدة' }
+  ];
+
+  // =====================================================================
+  // Storage (this device only)
+  // =====================================================================
+  const KEY = 'retail-english.v2';
+  function fresh() {
+    return {
+      v: 2,
+      profile: { name: '', store: '', startedAt: null },
+      settings: { ar: true, rate: 1, accent: 'mix', theme: 'auto', mic: true },
+      welcomeDone: false,
+      self: { entry: null, exit: null },
+      lc: { entry: null, exit: null },
+      steps: {},
+      checks: {},
+      srs: {},
+      time: {},
+      missions: {},
+      pulses: {},
+      survey: null,
+      best: {},
+      trainer: { ratings: [], pending: null, align: { A: null, B: null } }
+    };
+  }
+  function merge(base, extra) {
+    Object.keys(extra || {}).forEach(k => {
+      const b = base[k], e = extra[k];
+      if (e && typeof e === 'object' && !Array.isArray(e) && b && typeof b === 'object' && !Array.isArray(b)) base[k] = merge(b, e);
+      else base[k] = e;
+    });
+    return base;
+  }
+  function load() {
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { data = null; }
+    return merge(fresh(), data && data.v === 2 ? data : {});
+  }
+  let S = load();
+  let saveTimer = null;
+  function save() {
+    clearTimeout(saveTimer); saveTimer = null;
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage full or blocked */ }
+  }
+  function saveSoon() { if (!saveTimer) saveTimer = setTimeout(save, 2000); }
+  window.addEventListener('pagehide', save);
+
+  // Study time: counts 15-second ticks while the page is visible and in use.
+  let lastActive = Date.now();
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev => window.addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true }));
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && Date.now() - lastActive < 90000) {
+      const k = dayKey();
+      S.time[k] = (S.time[k] || 0) + 15;
+      saveSoon();
+    }
+  }, 15000);
+
+  // =====================================================================
+  // Progress model
+  // =====================================================================
+  const stepRec = (u, st) => (S.steps[u] || {})[st] || null;
+  const stepDone = (u, st) => !!stepRec(u, st);
+  function markStep(u, st, score) {
+    S.steps[u] = S.steps[u] || {};
+    const rec = S.steps[u][st] || {};
+    rec.at = Date.now();
+    if (typeof score === 'number') { rec.last = score; rec.best = Math.max(rec.best || 0, score); }
+    S.steps[u][st] = rec;
+    save();
+  }
+  function checkBest(u) {
+    const list = S.checks[u] || [];
+    return list.length ? Math.max(...list.map(c => c.pct)) : null;
+  }
+  const unitPassed = u => (checkBest(u) || 0) >= P.meta.passMark;
+  const unitStepsDone = u => STEPS.filter(s => stepDone(u, s.id)).length;
+  const overallPct = () => pct(UNITS.reduce((n, u) => n + unitStepsDone(u.id), 0), UNITS.length * STEPS.length);
+  function currentWeek() {
+    if (!S.profile.startedAt) return 1;
+    return clamp(Math.floor(daysBetween(S.profile.startedAt, dayKey()) / 7) + 1, 1, P.meta.weeks);
+  }
+  function nextStep() {
+    for (const u of UNITS) for (const s of STEPS) {
+      if (s.id === 'mission') continue;
+      if (s.id === 'check' ? !unitPassed(u.id) : !stepDone(u.id, s.id)) return { unit: u, step: s };
+    }
+    return null;
+  }
+  function secondsBetween(fromKey, toKey) {
+    return Object.keys(S.time).filter(k => k >= fromKey && k <= toKey).reduce((n, k) => n + S.time[k], 0);
+  }
+  const minutesLast7 = () => Math.round(secondsBetween(addDays(dayKey(), -6), dayKey()) / 60);
+  const minutesTotal = () => Math.round(Object.values(S.time).reduce((a, b) => a + b, 0) / 60);
+  const daysActive = () => Object.keys(S.time).filter(k => S.time[k] >= 60).length;
+
+  // Spaced review (Leitner boxes)
+  const BOX_DAYS = [0, 1, 3, 7, 14, 30];
+  function srsAdd(ids) {
+    const t = dayKey();
+    ids.forEach(id => { if (!S.srs[id]) S.srs[id] = { box: 1, due: addDays(t, 1) }; });
+    save();
+  }
+  const srsDue = () => { const t = dayKey(); return Object.keys(S.srs).filter(id => PH[id] && S.srs[id].due <= t); };
+  function srsGrade(id, grade) {
+    const c = S.srs[id]; if (!c) return;
+    const t = dayKey();
+    if (grade === 0) { c.box = 1; c.due = addDays(t, 1); }
+    else if (grade === 1) { c.due = addDays(t, Math.max(1, Math.floor(BOX_DAYS[c.box] / 2))); }
+    else { c.box = Math.min(5, c.box + 1); c.due = addDays(t, BOX_DAYS[c.box]); }
+    save();
+  }
+
+  // =====================================================================
+  // Numbers and prices (riyals and halalas)
+  // =====================================================================
+  const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+  const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  const u100 = n => (n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : ''));
+  function u1000(n) {
+    const h = Math.floor(n / 100), r = n % 100;
+    let s = h ? ONES[h] + ' hundred' : '';
+    if (r) s += (h ? ' and ' : '') + u100(r);
+    return s || 'zero';
+  }
+  function intWords(n) {
+    n = Math.floor(n);
+    if (n === 0) return 'zero';
+    if (n >= 1000000) return String(n);
+    const th = Math.floor(n / 1000), r = n % 1000;
+    let s = th ? u1000(th) + ' thousand' : '';
+    if (r) s += (th ? (r < 100 ? ' and ' : ' ') : '') + u1000(r);
+    return s;
+  }
+  function priceWords(h) {
+    const r = Math.floor(h / 100), c = h % 100, parts = [];
+    if (r) parts.push(intWords(r) + (r === 1 ? ' riyal' : ' riyals'));
+    if (c) parts.push(intWords(c) + (c === 1 ? ' halala' : ' halalas'));
+    return parts.join(' and ') || 'zero riyals';
+  }
+  function priceShort(h) {
+    const r = Math.floor(h / 100), c = h % 100;
+    if (!c || !r) return priceWords(h);
+    return intWords(r) + ' ' + (c < 10 ? 'oh ' + ONES[c] : u100(c));
+  }
+  const fmtPrice = h => Math.floor(h / 100).toLocaleString('en-US') + '.' + pad(h % 100);
+  function parsePrice(s) {
+    s = String(s || '').trim()
+      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+      .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+      .replace(/٫/g, '.').replace(/٬/g, '')
+      .replace(/[^\d.,]/g, '');
+    if (!s.includes('.') && /,\d{1,2}$/.test(s)) s = s.replace(/,(\d{1,2})$/, '.$1');
+    s = s.replace(/,/g, '');
+    if (!s || isNaN(+s)) return null;
+    return Math.round(+s * 100);
+  }
+  function randomPrice(rand = Math.random) {
+    const kind = rand();
+    let riyals;
+    if (kind < 0.35) riyals = pick([13, 14, 15, 16, 17, 18, 19, 30, 40, 50, 60, 70, 80, 90], rand);
+    else if (kind < 0.75) riyals = 1 + Math.floor(rand() * 99);
+    else riyals = 100 + Math.floor(rand() * 900);
+    return riyals * 100 + pick([0, 0, 0, 25, 50, 75, 95, 99, 10, 5, 40, 60], rand);
+  }
+
+  // =====================================================================
+  // Speech: text-to-speech with a mix of English accents for customers
+  // =====================================================================
+  const TTS = (() => {
+    const ok = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+    let voices = [];
+    let keepAlive = null;
+    let current = null; // keeps the utterance alive until it ends
+    const loc = v => String(v.lang || '').replace('_', '-').toLowerCase();
+    function refresh() { if (ok) voices = speechSynthesis.getVoices().filter(v => /^en(-|$)/.test(loc(v))); }
+    if (ok) {
+      refresh();
+      if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', refresh);
+      else speechSynthesis.onvoiceschanged = refresh;
+    }
+    function byLocale(prefix) {
+      const list = voices.filter(v => loc(v).startsWith(prefix));
+      return list.find(v => v.localService) || list[0] || null;
+    }
+    const CUSTOMER_ACCENTS = ['en-in', 'en-gb', 'en-au', 'en-us', 'en-ie', 'en-za', 'en-ph', 'en-ng', 'en-ca', 'en-nz', 'en-sg'];
+    function voiceFor(role, text) {
+      if (!voices.length) return null;
+      const acc = S.settings.accent;
+      if (role === 'c' && acc === 'mix') {
+        const avail = CUSTOMER_ACCENTS.filter(p => voices.some(v => loc(v).startsWith(p)));
+        if (avail.length) return byLocale(avail[hash(text) % avail.length]);
+      }
+      const order = acc === 'gb' ? ['en-gb', 'en-us'] : ['en-us', 'en-gb'];
+      for (const p of order) { const v = byLocale(p); if (v) return v; }
+      return voices[0];
+    }
+    function speak(text, opts = {}) {
+      return new Promise(resolve => {
+        if (!ok || !text) { resolve(false); return; }
+        const busy = speechSynthesis.speaking || speechSynthesis.pending;
+        if (busy) speechSynthesis.cancel();
+        const start = () => {
+          const u = new SpeechSynthesisUtterance(text);
+          const v = voiceFor(opts.role || 'k', text);
+          if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
+          u.rate = clamp((S.settings.rate || 1) * (opts.slow ? 0.7 : 1), 0.5, 1.5);
+          let done = false;
+          const fin = r => { if (done) return; done = true; clearInterval(keepAlive); resolve(r); };
+          u.onend = () => fin(true);
+          u.onerror = () => fin(false);
+          current = u;
+          speechSynthesis.resume();
+          speechSynthesis.speak(u);
+          clearInterval(keepAlive);
+          let started = false;
+          keepAlive = setInterval(() => {
+            if (speechSynthesis.speaking) { started = true; speechSynthesis.resume(); }
+            else if (!speechSynthesis.pending && started) fin(true);
+          }, 500);
+          setTimeout(() => fin(false), 4000 + (text.length * 160) / u.rate);
+        };
+        if (busy) setTimeout(start, 80); else start();
+      });
+    }
+    function stop() { if (ok) { speechSynthesis.cancel(); clearInterval(keepAlive); } }
+    return { ok, speak, stop, voiceCount: () => voices.length, locales: () => uniq(voices.map(loc)) };
+  })();
+
+  let seqId = 0;
+  function stopAll() { seqId++; TTS.stop(); Mic.stop(); }
+  async function playLines(lines, onLine) {
+    const my = ++seqId;
+    for (let i = 0; i < lines.length; i++) {
+      if (my !== seqId) return false;
+      if (onLine) onLine(i);
+      await TTS.speak(lines[i].en, { role: lines[i].s });
+      if (my !== seqId) return false;
+      await wait(300);
+    }
+    if (onLine) onLine(-1);
+    return true;
+  }
+  async function say(text, role, slow) {
+    seqId++;
+    if (!TTS.ok) { toast('الصوت غير مدعوم في هذا المتصفح'); return false; }
+    return TTS.speak(text, { role, slow });
+  }
+
+  // =====================================================================
+  // Speech recognition (optional; Chrome and Safari)
+  // =====================================================================
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const Mic = {
+    ok: !!SR,
+    current: null,
+    listen() {
+      return new Promise((resolve, reject) => {
+        let r;
+        try { r = new SR(); } catch (e) { reject('unsupported'); return; }
+        r.lang = 'en-US';
+        r.interimResults = false;
+        r.maxAlternatives = 4;
+        r.continuous = false;
+        let got = [];
+        r.onresult = e => { got = Array.from(e.results[0] || []).map(a => a.transcript); };
+        r.onerror = e => reject(e.error || 'error');
+        r.onend = () => { Mic.current = null; resolve(got); };
+        TTS.stop();
+        try { r.start(); Mic.current = r; } catch (e) { reject('start'); }
+      });
+    },
+    stop() { try { if (Mic.current) Mic.current.abort(); } catch (e) { /* ignore */ } Mic.current = null; }
+  };
+  const micOn = () => Mic.ok && S.settings.mic;
+
+  const CONTRACTIONS = {
+    "i'm": 'i am', "it's": 'it is', "you're": 'you are', "we're": 'we are', "they're": 'they are', "that's": 'that is',
+    "here's": 'here is', "there's": 'there is', "what's": 'what is', "where's": 'where is', "let's": 'let us',
+    "i'll": 'i will', "we'll": 'we will', "you'll": 'you will', "it'll": 'it will', "don't": 'do not', "doesn't": 'does not',
+    "didn't": 'did not', "can't": 'can not', cannot: 'can not', "won't": 'will not', "isn't": 'is not', "aren't": 'are not',
+    "i've": 'i have', "we've": 'we have', "haven't": 'have not', "i'd": 'i would', "you've": 'you have',
+    ok: 'okay', colour: 'color', colours: 'colors', grey: 'gray', centre: 'center'
+  };
+  function tokens(s) {
+    s = String(s).toLowerCase().replace(/[’‘`]/g, "'");
+    s = s.replace(/(\d+)[.,](\d{1,2})\b/g, (m, a, b) => intWords(+a) + ' ' + intWords(+b));
+    s = s.replace(/\d+/g, m => intWords(+m));
+    s = s.replace(/-/g, ' ').replace(/[^a-z' ]+/g, ' ');
+    return s.split(/\s+/).filter(Boolean).flatMap(w => (CONTRACTIONS[w] || w.replace(/'/g, '')).split(' '));
+  }
+  // Longest common subsequence: which target words were heard, in order.
+  function lcsMarks(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = m - 1; i >= 0; i--) for (let j = n - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    const marks = new Array(m).fill(false);
+    let i = 0, j = 0;
+    while (i < m && j < n) {
+      if (a[i] === b[j]) { marks[i] = true; i++; j++; }
+      else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+      else j++;
+    }
+    return marks;
+  }
+  function compareSpeech(target, heardList) {
+    const t = tokens(target);
+    let best = { score: 0, heard: heardList[0] || '', marks: t.map(() => false), words: t };
+    heardList.forEach(h => {
+      const marks = lcsMarks(t, tokens(h));
+      const score = t.length ? marks.filter(Boolean).length / t.length : 0;
+      if (score > best.score) best = { score, heard: h, marks, words: t };
+    });
+    return best;
+  }
+
+  // =====================================================================
+  // UI helpers
+  // =====================================================================
+  const view = $('#view');
+  let cleanups = [];
+  const onLeave = fn => cleanups.push(fn);
+
+  function setBar(title, sub) {
+    $('#barTitle').textContent = title;
+    $('#barSub').textContent = sub || '';
+    document.title = title.includes(P.meta.title.en) ? title : `${title} · ${P.meta.title.en}`;
+  }
+  function toast(msg) {
+    $$('.toast').forEach(t => t.remove());
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.setAttribute('role', 'status');
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2800);
+  }
+  // Arabic text from program.js may mark English fragments with backticks.
+  const rich = s => esc(s).replace(/`([^`]+)`/g, '<bdi class="en" lang="en" dir="ltr">$1</bdi>');
+  const plain = s => String(s || '').replace(/`/g, '');
+  const enSpan = (s, cls = '') => `<span class="en ${cls}" lang="en" dir="ltr">${esc(s)}</span>`;
+  const bi = o => `${esc(o.ar)} ${enSpan(o.en, 'small muted')}`;
+  const audioBtns = (text, role = 'k', slow = true) =>
+    `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}">${icon('volume')}استمع</button>` +
+    (slow ? `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}" data-slow="1">${icon('slow')}ببطء</button>` : '');
+  const ploChips = ids => ids.map(id => `<span class="pill brand" title="${esc(PLO[id] ? PLO[id].en : id)}">${esc(id)}</span>`).join(' ');
+  const progressBar = v => `<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><span style="width:${v}%"></span></div>`;
+  // Navigating to the current hash fires no hashchange, so re-render directly.
+  const go = hash => { if (location.hash === hash) render(); else location.hash = hash; };
+
+  // Tap-to-hear anywhere: any element with data-say.
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('[data-say]');
+    if (b) {
+      e.preventDefault();
+      $$('.audio-btn.playing, .phrase-btn.playing').forEach(x => x.classList.remove('playing'));
+      b.classList.add('playing');
+      await say(b.dataset.say, b.dataset.role || 'k', b.dataset.slow === '1');
+      b.classList.remove('playing');
+      return;
+    }
+    if (e.target.closest('[data-help]')) { e.preventDefault(); openHelp(); return; }
+    const link = e.target.closest('a[href^="#"]');
+    if (link && link.getAttribute('href') === location.hash) { e.preventDefault(); render(); }
+  });
+
+  function openHelp() {
+    if ($('.sheet-backdrop')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'sheet-backdrop';
+    wrap.innerHTML = `
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+        <div class="grabber"></div>
+        <div class="row" style="margin-bottom:10px">
+          <h2 id="helpTitle" class="grow" style="margin:0;font-size:1.1rem">مساعدة سريعة ${enSpan('Quick help', 'small muted')}</h2>
+          <button class="btn ghost small" type="button" data-close>إغلاق</button>
+        </div>
+        <p class="muted small" style="margin-bottom:12px">اضغط على العبارة لتسمعها، أو اعرضها للعميل.</p>
+        <div class="stack-lg">
+          ${P.quickHelp.map(g => `
+            <section class="stack">
+              <h3>${bi(g.group)}</h3>
+              ${g.items.map(i => `
+                <button class="phrase-btn" type="button" data-say="${esc(i.en)}" data-role="k">
+                  <span class="play">${icon('play')}</span>
+                  <span class="grow"><span class="say" lang="en" dir="ltr" style="display:block">${esc(i.en)}</span><span class="gloss">${esc(i.ar)}</span></span>
+                </button>`).join('')}
+            </section>`).join('')}
+        </div>
+      </div>`;
+    const close = () => { wrap.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); stopAll(); $('#helpBtn').focus(); };
+    const onKey = e => { if (e.key === 'Escape') close(); };
+    wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    document.body.style.overflow = 'hidden';
+    $('[data-close]', wrap).focus();
+  }
+
+  function applySettings() {
+    const t = S.settings.theme;
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    else delete document.documentElement.dataset.theme;
+    document.body.classList.toggle('no-ar', !S.settings.ar);
+  }
+
+  // Shared option button list
+  function optionButtons(options, isEn) {
+    return `<div class="options">${options.map((o, i) => `
+      <button class="option" type="button" data-opt="${i}">
+        ${isEn ? `<span class="say" lang="en" dir="ltr">${esc(o)}</span>` : `<span class="grow">${esc(o)}</span>`}
+      </button>`).join('')}</div>`;
+  }
+  function markOptions(root, chosen, correct) {
+    $$('.option', root).forEach((b, i) => {
+      b.disabled = true;
+      if (i === correct) { b.classList.add('correct'); b.insertAdjacentHTML('beforeend', icon('check', 'mark')); }
+      else if (i === chosen) { b.classList.add('wrong'); b.insertAdjacentHTML('beforeend', icon('x', 'mark')); }
+    });
+  }
+  const feedback = (ok, title, detail) => `<div class="feedback ${ok ? 'good' : 'bad'}" role="status">${icon(ok ? 'check' : 'x')}<div>${title}${detail ? `<span class="detail">${detail}</span>` : ''}</div></div>`;
+
+  // Distractors drawn from the same unit first, then the rest of the program.
+  function distractors(correct, pool, n, rand = Math.random) {
+    const seen = new Set([correct]);
+    const out = [];
+    shuffle(pool, rand).forEach(x => { if (out.length < n && !seen.has(x)) { seen.add(x); out.push(x); } });
+    return out;
+  }
+  function allCAr() { return uniq(UNITS.flatMap(u => u.phrases.map(p => p.cAr))); }
+  // Wrong replies for "choose the reply" items: never a generic reply and never one from
+  // the same function group (see the tags in program.js), same unit first.
+  function respDistractors(target, f, unitId, n, rand = Math.random) {
+    const ok = p => !p.gen && p.f !== f && p.k !== target;
+    const same = shuffle(unitById(unitId).phrases.filter(ok), rand);
+    const other = shuffle(UNITS.filter(u => u.id !== unitId).flatMap(u => u.phrases).filter(ok), rand);
+    return uniq(same.concat(other).map(p => p.k)).slice(0, n);
+  }
+
+  function makeMeaningItem(p, rand = Math.random) {
+    const unit = unitById(p.unit);
+    const text = pick(p.c, rand);
+    let ds = distractors(p.cAr, unit.phrases.map(x => x.cAr), 3, rand);
+    if (ds.length < 3) ds = ds.concat(distractors(p.cAr, allCAr().filter(x => !ds.includes(x)), 3 - ds.length, rand));
+    const options = shuffle([p.cAr, ...ds], rand);
+    return { t: 'meaning', text, role: 'c', options, correct: options.indexOf(p.cAr), phrase: p };
+  }
+  function makeRespondItem(p, rand = Math.random) {
+    const text = pick(p.c, rand);
+    const options = shuffle([p.k, ...respDistractors(p.k, p.f, p.unit, 3, rand)], rand);
+    return { t: 'respond', text, role: 'c', options, correct: options.indexOf(p.k), phrase: p };
+  }
+  function makePriceItem(amount, rand = Math.random) {
+    return { t: 'price', amount, text: rand() < 0.5 ? priceWords(amount) : priceShort(amount) };
+  }
+
+  // =====================================================================
+  // Router
+  // =====================================================================
+  const ROUTES = [
+    ['', viewHome], ['units', viewUnits], ['outcomes', viewOutcomes], ['unit/:u', viewUnit], ['unit/:u/:step', viewStep],
+    ['practice', viewPractice], ['numbers', viewNumbers], ['review', viewReview], ['dialogues', viewDialogues],
+    ['dialogue/:u/:which', viewDialogue], ['watch', viewWatch],
+    ['progress', viewProgress], ['record', viewRecord], ['settings', viewSettings], ['welcome', viewWelcome],
+    ['final', viewFinal], ['self/:form', viewSelf], ['lc/:form', viewListeningCheck], ['survey', viewSurvey],
+    ['trainer', viewTrainer], ['trainer/design', viewDesign], ['trainer/matrix', viewMatrix], ['trainer/guide/:u', viewGuide],
+    ['trainer/cards', viewCards], ['trainer/rate', viewRate], ['trainer/ratings', viewRatings], ['trainer/align', viewAlign]
+  ];
+  const PARENT = {
+    units: '', outcomes: 'units', unit: 'units', practice: '', numbers: 'practice', review: 'practice', dialogues: 'practice',
+    dialogue: 'dialogues', watch: 'practice', progress: '', record: 'progress', settings: '', welcome: '', final: 'units',
+    self: 'final', lc: 'final', survey: 'final', trainer: 'settings'
+  };
+  function parentOf(path) {
+    const parts = path.split('/');
+    if (parts[0] === 'unit' && parts.length === 3) return 'unit/' + parts[1];
+    if (parts[0] === 'trainer' && parts.length > 1) return 'trainer';
+    return PARENT[parts[0]] != null ? PARENT[parts[0]] : '';
+  }
+  function tabOf(path) {
+    const p = path.split('/')[0];
+    if (!p) return 'home';
+    if (['units', 'outcomes', 'unit', 'final', 'self', 'lc', 'survey'].includes(p)) return 'units';
+    if (['practice', 'numbers', 'review', 'dialogues', 'dialogue', 'watch'].includes(p)) return 'practice';
+    if (['progress', 'record'].includes(p)) return 'progress';
+    return '';
+  }
+  function match(path) {
+    const parts = path.split('/').filter(Boolean);
+    for (const [pat, fn] of ROUTES) {
+      const pp = pat.split('/').filter(Boolean);
+      if (pp.length !== parts.length) continue;
+      const params = {};
+      let ok = true;
+      pp.forEach((p, i) => {
+        if (p[0] === ':') params[p.slice(1)] = decodeURIComponent(parts[i]);
+        else if (p !== parts[i]) ok = false;
+      });
+      if (ok) return { fn, params };
+    }
+    return null;
+  }
+
+  const navStack = [];
+  let currentPath = '';
+  let replacing = false;
+  function render() {
+    stopAll();
+    cleanups.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
+    cleanups = [];
+    $$('.sheet-backdrop').forEach(s => s.remove());
+    document.body.style.overflow = '';
+
+    let path = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+    let m = match(path);
+    if (!m) { path = ''; m = match(''); }
+    currentPath = path;
+
+    if (replacing) { navStack[navStack.length - 1] = path; replacing = false; }
+    else if (navStack.length > 1 && navStack[navStack.length - 2] === path) navStack.pop();
+    else if (navStack[navStack.length - 1] !== path) navStack.push(path);
+
+    const top = ['', 'units', 'practice', 'progress'].includes(path);
+    $('#backBtn').hidden = top;
+    const tab = tabOf(path);
+    $$('.tab-bar a').forEach(a => { if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+
+    view.innerHTML = '';
+    view.removeAttribute('dir');
+    view.removeAttribute('lang');
+    view.classList.remove('trainer');
+    try { m.fn(m.params); }
+    catch (err) {
+      console.error(err);
+      view.innerHTML = `<div class="empty">${icon('alert')}<p>حدث خطأ غير متوقع.</p><a class="btn" href="#/">الرئيسية</a></div>`;
+    }
+    window.scrollTo(0, 0);
+    view.focus({ preventScroll: true });
+  }
+  function goBack() {
+    if (navStack.length > 1) { history.back(); return; }
+    // Opened directly on an inner page: go up without leaving a history entry behind.
+    replacing = true;
+    location.replace('#/' + parentOf(currentPath));
+  }
+
+  // =====================================================================
+  // Views: Home
+  // =====================================================================
+  function viewHome() {
+    setBar(`${P.meta.title.ar} · ${P.meta.title.en}`, P.meta.subtitle.ar);
+    if (!S.welcomeDone) {
+      view.innerHTML = `
+        <div class="stack-lg">
+          <section class="hero">
+            <p class="small" style="opacity:.85">${esc(P.meta.weeks)} أسابيع · ${esc(P.meta.hours)} ساعة · ${esc(P.meta.mode.ar)}</p>
+            <h2>${esc(P.meta.subtitle.ar)}</h2>
+            <p class="en" lang="en" dir="ltr" style="text-align:left">${esc(P.meta.subtitle.en)}</p>
+          </section>
+          <div class="card stack">
+            <h3>ماذا ستتعلم؟</h3>
+            <ul class="outcomes">${P.outcomes.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
+            <a class="btn block" href="#/welcome">ابدأ البرنامج</a>
+          </div>
+          <button class="card tight row" type="button" data-help>
+            <span class="unit-badge">${icon('help')}</span>
+            <span class="grow"><strong>في العمل الآن؟</strong><br><span class="muted small">عبارات سريعة تسمعها وتعرضها للعميل</span></span>
+          </button>
+        </div>`;
+      return;
+    }
+    const wk = currentWeek();
+    const nx = nextStep();
+    const due = srsDue().length;
+    const passed = UNITS.filter(u => unitPassed(u.id)).length;
+    const weekUnit = UNITS.find(u => u.week === wk) || UNITS[0];
+    const missionDue = !S.missions[weekUnit.id];
+    const allPassed = passed === UNITS.length;
+
+    let cards = '';
+    if (nx) {
+      cards += `
+        <a class="card unit-card" href="#/unit/${nx.unit.id}/${nx.step.id}">
+          <span class="unit-badge">${icon(nx.step.icon)}</span>
+          <span class="grow">
+            <span class="muted small">تابع من حيث توقفت · الوحدة ${unitIndex(nx.unit.id) + 1}</span><br>
+            <strong>${esc(nx.step.ar)}</strong> <span class="muted small">— ${esc(nx.unit.title.ar)}</span>
+          </span>
+          <span class="chev">${icon('next')}</span>
+        </a>`;
+    } else if (allPassed && !S.lc.exit) {
+      cards += `
+        <a class="card unit-card" href="#/final">
+          <span class="unit-badge done">${icon('award')}</span>
+          <span class="grow"><strong>أنهيت الوحدات! حان وقت التقييم الختامي</strong><br><span class="muted small">اختبار الاستماع والتقييم الذاتي والاستبانة</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>`;
+    }
+    if (due) {
+      cards += `
+        <a class="card unit-card" href="#/review">
+          <span class="unit-badge">${icon('cards')}</span>
+          <span class="grow"><strong>مراجعة اليوم: ${due} ${due === 1 ? 'عبارة' : 'عبارات'}</strong><br><span class="muted small">التكرار المتباعد يثبّت العبارات في الذاكرة</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>`;
+    }
+    if (missionDue) {
+      cards += `
+        <a class="card unit-card" href="#/unit/${weekUnit.id}/mission">
+          <span class="unit-badge">${icon('briefcase')}</span>
+          <span class="grow"><strong>مهمة هذا الأسبوع في العمل</strong><br><span class="muted small">${esc(plain(weekUnit.mission.ar).slice(0, 90))}…</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>`;
+    }
+    if (!S.lc.entry) {
+      cards += `
+        <a class="card unit-card" href="#/lc/entry">
+          <span class="unit-badge">${icon('headphones')}</span>
+          <span class="grow"><strong>اختبار الاستماع الأولي</strong><br><span class="muted small">10 أسئلة قصيرة لقياس نقطة البداية</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>`;
+    }
+    view.innerHTML = `
+      <div class="stack-lg">
+        <section class="hero stack">
+          <p class="small" style="opacity:.85">الأسبوع ${wk} من ${P.meta.weeks} · ${esc(weekUnit.title.ar)}</p>
+          <h2>مرحبًا${S.profile.name ? '، ' + esc(S.profile.name) : ''}!</h2>
+          ${progressBar(overallPct())}
+          <div class="stat-grid">
+            <div class="stat"><div class="v">${passed}/${UNITS.length}</div><div class="l">وحدات مجتازة</div></div>
+            <div class="stat"><div class="v">${minutesLast7()}</div><div class="l">دقيقة هذا الأسبوع</div></div>
+            <div class="stat"><div class="v">${due}</div><div class="l">للمراجعة</div></div>
+          </div>
+        </section>
+        <div class="stack">${cards || `<div class="card">${icon('check')}<p>لا شيء مطلوب الآن. أحسنت!</p></div>`}</div>
+        <button class="card tight row" type="button" data-help>
+          <span class="unit-badge">${icon('help')}</span>
+          <span class="grow"><strong>في العمل الآن؟</strong><br><span class="muted small">عبارات سريعة تسمعها وتعرضها للعميل</span></span>
+        </button>
+      </div>`;
+  }
+
+  // =====================================================================
+  // Welcome (first run): intro, profile, self-assessment, listening check
+  // =====================================================================
+  function viewWelcome() {
+    setBar('مرحبًا بك', P.meta.title.ar);
+    let stage = 0;
+    function finish() {
+      S.welcomeDone = true;
+      if (!S.profile.startedAt) S.profile.startedAt = dayKey();
+      save();
+    }
+    function draw() {
+      stopAll();
+      if (stage === 0) {
+        view.innerHTML = `
+          <div class="stack-lg">
+            <section class="hero">
+              <h2>${esc(P.meta.subtitle.ar)}</h2>
+              <p class="en" lang="en" dir="ltr" style="text-align:left">${esc(P.meta.subtitle.en)}</p>
+              <div class="meta"><span class="pill">${P.meta.weeks} أسابيع</span><span class="pill">${P.meta.hours} ساعة</span><span class="pill">${esc(P.meta.mode.ar)}</span></div>
+            </section>
+            <div class="card stack">
+              <h3>في نهاية البرنامج ستستطيع أن:</h3>
+              <ul class="outcomes">${P.outcomes.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
+            </div>
+            <div class="card stack">
+              <h3>كيف يعمل البرنامج كل أسبوع؟</h3>
+              ${P.meta.weeklyPattern.map(w => `<div class="row"><span class="pill brand num">${w.hours} س</span><span>${esc(w.ar)}</span></div>`).join('')}
+            </div>
+            <button class="btn block" type="button" data-act="next">لنبدأ</button>
+          </div>`;
+      } else if (stage === 1) {
+        view.innerHTML = `
+          <div class="stack-lg">
+            <div class="card stack">
+              <h3>عرّفنا بنفسك (اختياري)</h3>
+              <label class="field">الاسم<input class="input" id="pName" autocomplete="name" value="${esc(S.profile.name)}"></label>
+              <label class="field">المتجر أو القسم<input class="input" id="pStore" value="${esc(S.profile.store)}"></label>
+              <p class="muted small">تبقى بياناتك على هذا الجهاز فقط.</p>
+            </div>
+            <button class="btn block" type="button" data-act="next">التالي</button>
+          </div>`;
+      } else if (stage === 2) {
+        view.innerHTML = `<div id="selfHost"></div>`;
+        selfForm($('#selfHost'), 'entry', () => { stage = 3; draw(); });
+      } else if (stage === 3) {
+        view.innerHTML = `
+          <div class="stack-lg">
+            <div class="card stack">
+              <h3>اختبار الاستماع الأولي</h3>
+              <p>عشرة أسئلة قصيرة: تكتب أسعارًا تسمعها، وتختار ما يريده العميل. هذا الاختبار يقيس نقطة البداية فقط، ولا يؤثر على شيء.</p>
+              <p class="muted small">ستعيده في نهاية البرنامج بجمل جديدة لنرى تقدمك.</p>
+            </div>
+            <button class="btn block" type="button" data-act="lc">ابدأ الاختبار</button>
+            <button class="btn ghost block" type="button" data-act="skip">لاحقًا</button>
+          </div>`;
+      } else if (stage === 4) {
+        view.innerHTML = `<div id="lcHost"></div>`;
+        lcRunner($('#lcHost'), 'entry', () => { stage = 5; draw(); });
+      } else {
+        finish();
+        view.innerHTML = `
+          <div class="stack-lg center">
+            <div class="empty" style="color:var(--good)">${icon('award')}</div>
+            <h2>أنت جاهز!</h2>
+            <p>ابدأ بالوحدة الأولى. خصص نحو 20 دقيقة يوميًا، واحضر ورشة الأسبوع.</p>
+            <a class="btn block" href="#/unit/${UNITS[0].id}">ابدأ الوحدة الأولى</a>
+            <a class="btn ghost block" href="#/">الرئيسية</a>
+          </div>`;
+      }
+      window.scrollTo(0, 0);
+    }
+    // #view outlives this screen, so the listener is removed when the route changes.
+    const onClick = e => {
+      const a = e.target.closest('[data-act]');
+      if (!a) return;
+      if (a.dataset.act === 'next' && stage < 2) {
+        if (stage === 1) {
+          S.profile.name = $('#pName').value.trim().slice(0, 60);
+          S.profile.store = $('#pStore').value.trim().slice(0, 80);
+          save();
+        }
+        stage++; draw();
+      } else if (a.dataset.act === 'lc' && stage === 3) { stage = 4; draw(); }
+      else if (a.dataset.act === 'skip' && stage === 3) { stage = 5; draw(); }
+    };
+    view.addEventListener('click', onClick);
+    onLeave(() => view.removeEventListener('click', onClick));
+    draw();
+  }
+
+  // Self-assessment against the program outcomes (entry and exit).
+  function selfForm(host, form, done) {
+    const prev = S.self[form] || {};
+    host.innerHTML = `
+      <div class="stack-lg">
+        <div class="card stack">
+          <h3>${form === 'entry' ? 'التقييم الذاتي في البداية' : 'التقييم الذاتي في النهاية'}</h3>
+          <p class="muted small">إلى أي حد تستطيع فعل ما يلي بالإنجليزية؟ لا توجد إجابة خاطئة.</p>
+        </div>
+        ${P.outcomes.map(o => `
+          <fieldset class="card stack" style="border:1px solid var(--line)">
+            <legend class="sr-only">${esc(o.id)}</legend>
+            <p><span class="pill brand">${esc(o.id)}</span> ${esc(o.ar)}</p>
+            <div class="scale">${SELF_SCALE.map(s => `
+              <label><input type="radio" name="${o.id}" value="${s.v}" ${prev[o.id] === s.v ? 'checked' : ''}><span>${esc(s.ar)}</span></label>`).join('')}
+            </div>
+          </fieldset>`).join('')}
+        <button class="btn block" type="button" data-act="save-self">حفظ</button>
+      </div>`;
+    $('[data-act="save-self"]', host).addEventListener('click', () => {
+      const out = { at: Date.now() };
+      let missing = 0;
+      P.outcomes.forEach(o => {
+        const c = $(`input[name="${o.id}"]:checked`, host);
+        if (c) out[o.id] = +c.value; else missing++;
+      });
+      if (missing) { toast('أجب عن جميع العبارات من فضلك'); return; }
+      S.self[form] = out;
+      save();
+      done();
+    });
+  }
+
+  // Listening check runner (entry and exit forms). Test conditions: two plays per item, no feedback until the end.
+  function lcRunner(host, form, done) {
+    const items = P.listeningCheck[form].map((it, i) => {
+      if (it.t === 'price') return { ...it, text: priceWords(it.amount) };
+      const rand = rng(hash(form + ':' + i));
+      const options = shuffle(it.options, rand);
+      return { ...it, options, correct: options.indexOf(it.options[0]) };
+    });
+    let idx = 0, plays = 0;
+    const answers = [];
+    function draw() {
+      stopAll();
+      const it = items[idx];
+      plays = 0;
+      const part = it.t === 'price' ? 'الجزء أ: اكتب السعر الذي تسمعه (بالريال)' : 'الجزء ب: ماذا يريد العميل؟';
+      host.innerHTML = `
+        <div class="stack">
+          <div class="activity-head">${progressBar(pct(idx, items.length))}<span class="counter num">${idx + 1} / ${items.length}</span></div>
+          <p class="muted small">${part}</p>
+          <div class="card prompt-card stack">
+            <button class="big-play" type="button" data-act="play" aria-label="استمع">${icon('play')}</button>
+            <p class="muted small" id="playsLeft">يمكنك الاستماع مرتين</p>
+          </div>
+          ${it.t === 'price'
+            ? `<input class="num-input" id="ans" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="السعر">
+               <button class="btn block" type="button" data-act="submit">التالي</button>`
+            : optionButtons(it.options, false)}
+        </div>`;
+      $('[data-act="play"]', host).addEventListener('click', play);
+      if (it.t === 'price') {
+        $('[data-act="submit"]', host).addEventListener('click', () => record(parsePrice($('#ans').value)));
+        $('#ans', host).addEventListener('keydown', e => { if (e.key === 'Enter') record(parsePrice(e.target.value)); });
+      } else {
+        $$('.option', host).forEach(b => b.addEventListener('click', () => record(+b.dataset.opt)));
+      }
+      play();
+    }
+    async function play() {
+      const btn = $('[data-act="play"]', host);
+      if (!btn || plays >= 2) return;
+      plays++;
+      btn.classList.add('playing');
+      $('#playsLeft', host).textContent = plays >= 2 ? 'انتهت مرات الاستماع' : 'يمكنك الاستماع مرة أخرى';
+      await say(items[idx].text || items[idx].en, 'c');
+      if (btn.isConnected) { btn.classList.remove('playing'); if (plays >= 2) btn.disabled = true; }
+    }
+    function record(ans) {
+      const it = items[idx];
+      const ok = it.t === 'price' ? ans === it.amount : ans === it.correct;
+      answers.push({ t: it.t, plo: it.plo, ok, ans: it.t === 'price' ? ans : (it.options[ans] || null) });
+      idx++;
+      if (idx < items.length) draw(); else finish();
+    }
+    function finish() {
+      stopAll();
+      const score = answers.filter(a => a.ok).length;
+      const partA = answers.filter(a => a.t === 'price');
+      const partB = answers.filter(a => a.t !== 'price');
+      S.lc[form] = {
+        score, total: answers.length, at: Date.now(),
+        partA: partA.filter(a => a.ok).length, partATotal: partA.length,
+        partB: partB.filter(a => a.ok).length, partBTotal: partB.length,
+        answers
+      };
+      save();
+      const prev = form === 'exit' && S.lc.entry ? S.lc.entry : null;
+      host.innerHTML = `
+        <div class="stack-lg">
+          <div class="card stack center">
+            <p class="muted">نتيجتك</p>
+            <div class="price-tag" style="font-size:2.6rem">${score}/${answers.length}</div>
+            <p>الأسعار: ${S.lc[form].partA}/${partA.length} · فهم الطلبات: ${S.lc[form].partB}/${partB.length}</p>
+            ${prev ? `<p class="pill ${score >= prev.score ? 'good' : 'amber'}">في البداية: ${prev.score}/${prev.total}</p>` : ''}
+          </div>
+          <button class="btn block" type="button" data-act="done">متابعة</button>
+        </div>`;
+      $('[data-act="done"]', host).addEventListener('click', done);
+    }
+    draw();
+  }
+
+  // =====================================================================
+  // Views: Units, outcomes, unit page
+  // =====================================================================
+  function viewUnits() {
+    setBar('الوحدات', `${P.meta.weeks} أسابيع · ${P.meta.hours} ساعة`);
+    const wk = currentWeek();
+    const entryDone = S.self.entry && S.lc.entry;
+    view.innerHTML = `
+      <div class="stack-lg">
+        <a class="card unit-card" href="#/outcomes">
+          <span class="unit-badge">${icon('flag')}</span>
+          <span class="grow"><strong>مخرجات البرنامج</strong><br><span class="muted small">ماذا ستستطيع أن تفعل، وكيف يُقيَّم كل مخرج</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>
+        ${entryDone ? '' : `
+        <a class="card unit-card" href="${S.self.entry ? '#/lc/entry' : '#/self/entry'}">
+          <span class="unit-badge">${icon('clipboard')}</span>
+          <span class="grow"><strong>تقييم البداية</strong><br><span class="muted small">${S.self.entry ? 'بقي اختبار الاستماع الأولي' : 'التقييم الذاتي واختبار الاستماع'}</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>`}
+        <div class="stack">
+          ${UNITS.map((u, i) => {
+            const done = unitPassed(u.id);
+            const best = checkBest(u.id);
+            return `
+            <a class="card unit-card" href="#/unit/${u.id}">
+              <span class="unit-badge ${done ? 'done' : ''}">${done ? icon('check') : icon(u.icon)}</span>
+              <span class="grow stack" style="gap:4px">
+                <span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}${u.week === wk && S.welcomeDone ? ' · <strong style="color:var(--brand)">هذا الأسبوع</strong>' : ''}</span>
+                <strong>${esc(u.title.ar)}</strong>
+                ${enSpan(u.title.en, 'small muted')}
+                ${progressBar(pct(unitStepsDone(u.id), STEPS.length))}
+                <span class="muted small">${unitStepsDone(u.id)}/${STEPS.length} خطوات${best != null ? ` · اختبار الوحدة ${best}%` : ''}</span>
+              </span>
+              <span class="chev">${icon('next')}</span>
+            </a>`;
+          }).join('')}
+        </div>
+        <a class="card unit-card" href="#/final">
+          <span class="unit-badge">${icon('award')}</span>
+          <span class="grow"><strong>التقييم الختامي</strong><br><span class="muted small">الأسبوع ${P.meta.weeks}: اختبار الاستماع، التقييم الذاتي، الاستبانة، ولعب الأدوار مع المدربين</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>
+      </div>`;
+  }
+
+  function viewOutcomes() {
+    setBar('مخرجات البرنامج', 'Program learning outcomes');
+    view.innerHTML = `
+      <div class="stack-lg">
+        <p class="muted">لكل مخرج نشاط يدرّبك عليه ومهمة تقيسه. المهارات الشفهية تُقيَّم بالأداء: لعب أدوار ختامي يقيّمه مدربان.</p>
+        ${P.outcomes.map(o => {
+          const units = UNITS.filter(u => u.plos.includes(o.id));
+          const tasks = P.assessments.filter(a => a.plos.includes(o.id));
+          return `
+          <div class="card stack">
+            <div class="row"><span class="pill brand">${esc(o.id)}</span><strong>${esc(o.short.ar)}</strong></div>
+            <p>${esc(o.ar)}</p>
+            <p class="en small muted ltr" lang="en">${esc(o.en)}</p>
+            <div class="small"><strong>تتدرب عليه في:</strong> ${units.map(u => `<a class="pill" href="#/unit/${u.id}">الوحدة ${unitIndex(u.id) + 1}</a>`).join(' ')}</div>
+            <div class="small stack" style="gap:4px"><strong>يُقاس بـ:</strong>
+              ${tasks.map(a => `<span>${a.summative ? '●' : '○'} ${esc(a.ar)} <span class="muted">(${esc(a.when.ar)})</span></span>`).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+        <p class="muted small">● تقييم ختامي يحدد تحقق المخرج · ○ تقييم تشخيصي أو تكويني للتغذية الراجعة</p>
+      </div>`;
+  }
+
+  function viewUnit({ u }) {
+    const unit = unitById(u);
+    if (!unit) { go('#/units'); return; }
+    const i = unitIndex(u);
+    setBar(`الوحدة ${i + 1}: ${unit.title.ar}`, `الأسبوع ${unit.week} · ${unit.title.en}`);
+    const best = checkBest(u);
+    view.innerHTML = `
+      <div class="stack-lg">
+        <section class="hero stack">
+          <p class="small" style="opacity:.85">الوحدة ${i + 1} · الأسبوع ${unit.week}</p>
+          <h2>${esc(unit.title.ar)}</h2>
+          <p class="en" lang="en" dir="ltr" style="text-align:left">${esc(unit.title.en)}</p>
+          <div class="meta">${unit.plos.map(id => `<span class="pill">${esc(id)} · ${esc(PLO[id].short.ar)}</span>`).join('')}</div>
+        </section>
+        <div class="card stack">
+          <h3>في نهاية الوحدة أستطيع أن:</h3>
+          <ul class="outcomes">${unit.objectives.map(o => `<li>${icon('check')}<span>${esc(o.ar)}<span class="en ltr" lang="en">${esc(o.en)}</span></span></li>`).join('')}</ul>
+        </div>
+        <div class="note"><strong>انتبه:</strong> ${rich(unit.watchOut.ar)}</div>
+        <div class="stack">
+          ${STEPS.map((s, n) => {
+            const done = s.id === 'check' ? unitPassed(u) : stepDone(u, s.id);
+            const extra = s.id === 'check' && best != null ? ` · أفضل نتيجة ${best}%` : '';
+            return `
+            <a class="step ${done ? 'done' : ''}" href="#/unit/${u}/${s.id}">
+              <span class="ico">${done ? icon('check') : icon(s.icon)}</span>
+              <span class="grow">
+                <span class="title">${n + 1}. ${esc(s.ar)}</span><br>
+                <span class="strand">${esc(CYCLE[s.cycle].ar)} · ${esc(STRAND[s.strand].ar)}${extra}</span>
+              </span>
+              <span class="chev muted">${icon('next')}</span>
+            </a>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  // =====================================================================
+  // Unit steps
+  // =====================================================================
+  function viewStep({ u, step }) {
+    const unit = unitById(u);
+    const sIdx = STEPS.findIndex(s => s.id === step);
+    if (!unit || sIdx < 0) { go('#/units'); return; }
+    const s = STEPS[sIdx];
+    setBar(s.ar, `الوحدة ${unitIndex(u) + 1}: ${unit.title.ar}`);
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="row small muted">
+          <span class="pill">${sIdx + 1}/${STEPS.length}</span>
+          <span>${esc(CYCLE[s.cycle].ar)}</span><span>·</span><span>${esc(STRAND[s.strand].ar)}</span>
+        </div>
+        <div id="stepBody" class="stack-lg"></div>
+      </div>`;
+    const host = $('#stepBody');
+    const next = STEPS[sIdx + 1];
+    const nextBtn = () => next
+      ? `<a class="btn block" href="#/unit/${u}/${next.id}">التالي: ${esc(next.ar)} ${icon('next')}</a>`
+      : `<a class="btn block" href="#/unit/${u}">العودة إلى الوحدة</a>`;
+    const ctx = { unit, u, host, nextBtn, step: s };
+    ({ context: stepContext, model: stepModel, phrases: stepPhrases, listen: stepListen, build: stepBuild,
+      roleplay: stepRoleplay, speed: stepSpeed, check: stepCheck, mission: stepMission })[step](ctx);
+  }
+
+  function stepContext({ unit, u, host }) {
+    host.innerHTML = `
+      <div class="card"><p>${rich(unit.context.ar)}</p></div>
+      <div class="card stack">
+        <h3>في نهاية الوحدة أستطيع أن:</h3>
+        <ul class="outcomes">${unit.objectives.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
+      </div>
+      <h2 class="section">كلمات مهمة ${enSpan('Key words')}</h2>
+      <div class="stack">
+        ${unit.words.map(w => `
+          <button class="phrase-btn" type="button" data-say="${esc(w.en)}" data-role="k">
+            <span class="play">${icon('play')}</span>
+            <span class="grow"><span class="say" lang="en" dir="ltr" style="display:block">${esc(w.en)}</span><span class="gloss">${esc(w.ar)}</span></span>
+          </button>`).join('')}
+      </div>
+      <button class="btn block" type="button" data-act="done">فهمت، التالي ${icon('next')}</button>`;
+    $('[data-act="done"]', host).addEventListener('click', () => { markStep(u, 'context'); go(`#/unit/${u}/model`); });
+  }
+
+  function dialogueHtml(lines, stages, opts = {}) {
+    let lastSt = null;
+    return `<div class="dialogue">${lines.map((l, i) => {
+      let chip = '';
+      if (stages && l.st && l.st !== lastSt) {
+        const st = stages.find(x => x.id === l.st);
+        if (st) chip = `<div class="stage-chip">${esc(st.ar)} · ${enSpan(st.en)}</div>`;
+        lastSt = l.st;
+      }
+      const hide = opts.hideK && l.s === 'k';
+      return `${chip}
+        <button class="bubble ${l.s} ${hide ? 'hidden-line' : ''}" type="button" data-line="${i}" ${hide ? '' : `data-say="${esc(l.en)}" data-role="${l.s}"`}>
+          <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
+          <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
+          <span class="gloss">${esc(l.ar)}</span>
+        </button>`;
+    }).join('')}</div>`;
+  }
+  function wirePlayAll(root, lines) {
+    const btn = $('[data-act="play-all"]', root);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      if (btn.dataset.state === 'on') { stopAll(); return; }
+      btn.dataset.state = 'on';
+      btn.innerHTML = `${icon('stop')} إيقاف`;
+      await playLines(lines, i => {
+        $$('.bubble', root).forEach(b => b.classList.remove('active'));
+        if (i >= 0) { const b = $(`.bubble[data-line="${i}"]`, root); if (b) { b.classList.add('active'); b.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }
+      });
+      $$('.bubble', root).forEach(b => b.classList.remove('active'));
+      if (btn.isConnected) { btn.dataset.state = ''; btn.innerHTML = `${icon('play')} استمع للحوار كاملًا`; }
+    });
+  }
+
+  function stepModel({ unit, u, host, nextBtn }) {
+    const m = unit.model;
+    const order = uniq(m.lines.map(l => l.st).filter(Boolean));
+    const stageLabel = id => unit.stages.find(s => s.id === id) || { ar: id, en: id };
+    let shuffled = shuffle(order);
+    for (let k = 0; k < 5 && shuffled.join() === order.join(); k++) shuffled = shuffle(order);
+    host.innerHTML = `
+      <div class="card stack">
+        <h3>${esc(m.title.ar)} ${enSpan(m.title.en, 'small muted')}</h3>
+        <p class="muted small">${esc(m.setting.ar)}</p>
+        <p class="small">استمع أولًا، ثم لاحظ مراحل الحوار. كل حوار خدمة يمر بمراحل ثابتة.</p>
+        <button class="btn" type="button" data-act="play-all">${icon('play')} استمع للحوار كاملًا</button>
+      </div>
+      ${dialogueHtml(m.lines, unit.stages)}
+      <div class="card stack" id="orderTask">
+        <h3>رتّب مراحل الحوار ${enSpan('Put the stages in order', 'small muted')}</h3>
+        <p class="muted small">اضغط على المراحل بالترتيب الذي تحدث به في الحوار.</p>
+        <div class="row wrap" id="orderAnswer" style="min-height:40px"></div>
+        <div class="row wrap" id="orderChoices">
+          ${shuffled.map(id => `<button class="btn ghost small" type="button" data-stage="${esc(id)}">${esc(stageLabel(id).ar)}</button>`).join('')}
+        </div>
+        <div id="orderFb"></div>
+      </div>
+      <div id="modelNext"></div>`;
+    wirePlayAll(host, m.lines);
+    let pos = 0, mistakes = 0;
+    $('#orderChoices', host).addEventListener('click', e => {
+      const b = e.target.closest('[data-stage]');
+      if (!b || b.disabled) return;
+      if (b.dataset.stage === order[pos]) {
+        b.disabled = true;
+        b.classList.add('chosen');
+        $('#orderAnswer', host).insertAdjacentHTML('beforeend', `<span class="pill good">${pos + 1}. ${esc(stageLabel(order[pos]).ar)}</span>`);
+        pos++;
+        if (pos === order.length) {
+          const score = pct(order.length, order.length + mistakes);
+          markStep(u, 'model', score);
+          $('#orderFb', host).innerHTML = feedback(true, 'أحسنت! هذه مراحل الحوار.', 'ستستخدم المراحل نفسها في لعب الأدوار.');
+          $('#modelNext', host).innerHTML = nextBtn();
+        }
+      } else {
+        mistakes++;
+        b.classList.add('shake');
+        setTimeout(() => b.classList.remove('shake'), 400);
+        $('#orderFb', host).innerHTML = feedback(false, 'ليست هذه المرحلة التالية. استمع مرة أخرى إن احتجت.');
+      }
+    });
+  }
+
+  function phraseCard(p) {
+    return `
+      <div class="card stack">
+        <div class="stack" style="gap:4px">
+          <span class="speaker c">العميل يقول</span>
+          <p class="say" lang="en" dir="ltr">${esc(p.c[0])}</p>
+          <p class="say small muted" lang="en" dir="ltr" style="font-weight:500">${esc(p.c[1])}</p>
+          <p class="gloss">${esc(p.cAr)}</p>
+          <div class="row wrap">${audioBtns(p.c[0], 'c', false)}</div>
+        </div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:4px 0">
+        <div class="stack" style="gap:4px">
+          <span class="speaker k">أنت تقول</span>
+          <p class="say" lang="en" dir="ltr">${esc(p.k)}</p>
+          <p class="gloss">${esc(p.kAr)}</p>
+          <div class="row wrap">${audioBtns(p.k, 'k')}</div>
+        </div>
+        ${p.tip ? `<div class="note brand small"><strong>نصيحة:</strong> ${esc(p.tip.ar)}</div>` : ''}
+      </div>`;
+  }
+
+  function stepPhrases({ unit, u, host, nextBtn }) {
+    host.innerHTML = `
+      <div class="note brand"><strong>طريقة التدريب:</strong> استمع لكل عبارة، ثم كررها بصوت عالٍ. استخدم «ببطء» إذا احتجت.</div>
+      ${unit.phrases.map(phraseCard).join('')}
+      <button class="btn block" type="button" data-act="done">${icon('cards')} أضفها إلى مراجعتي اليومية</button>
+      <div id="phNext"></div>`;
+    $('[data-act="done"]', host).addEventListener('click', e => {
+      srsAdd(unit.phrases.map(p => p.id));
+      markStep(u, 'phrases');
+      e.currentTarget.disabled = true;
+      toast('أُضيفت العبارات إلى المراجعة');
+      $('#phNext', host).innerHTML = nextBtn();
+    });
+  }
+
+  // Generic quiz runner used by "Understand the customer" and the unit check.
+  function runQuiz(host, items, { showText = 'toggle', onFinish, title }) {
+    let idx = 0;
+    const results = [];
+    function draw() {
+      stopAll();
+      const it = items[idx];
+      let body;
+      if (it.t === 'price') {
+        body = `
+          <div class="card prompt-card stack">
+            <button class="big-play" type="button" data-act="play" aria-label="استمع">${icon('play')}</button>
+            <p class="muted small">اكتب السعر الذي تسمعه (بالريال)</p>
+          </div>
+          <input class="num-input" id="ans" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="السعر">
+          <button class="btn block" type="button" data-act="submit">تحقق</button>`;
+      } else {
+        const prompt = it.t === 'meaning' ? 'استمع: ماذا يقصد العميل؟' : 'العميل يقول… ماذا ترد؟';
+        const textVisible = it.t === 'respond';
+        body = `
+          <div class="card prompt-card stack">
+            <button class="big-play" type="button" data-act="play" aria-label="استمع">${icon('play')}</button>
+            <p class="muted small">${prompt}</p>
+            ${textVisible ? `<p class="say big" lang="en" dir="ltr">${esc(it.text)}</p>`
+              : (showText === 'toggle' ? `<button class="btn ghost small" type="button" data-act="show" style="align-self:center">${icon('eye')} إظهار النص</button><p class="say" lang="en" dir="ltr" id="hiddenText" hidden>${esc(it.text)}</p>` : '')}
+          </div>
+          ${optionButtons(it.options, it.t === 'respond')}`;
+      }
+      host.innerHTML = `
+        <div class="stack">
+          ${title ? `<h3>${title}</h3>` : ''}
+          <div class="activity-head">${progressBar(pct(idx, items.length))}<span class="counter num">${idx + 1} / ${items.length}</span></div>
+          ${body}
+          <div id="qfb"></div>
+          <div id="qnext"></div>
+        </div>`;
+      const playBtn = $('[data-act="play"]', host);
+      const play = async () => { playBtn.classList.add('playing'); await say(it.text, it.t === 'price' ? 'c' : it.role); if (playBtn.isConnected) playBtn.classList.remove('playing'); };
+      playBtn.addEventListener('click', play);
+      const show = $('[data-act="show"]', host);
+      if (show) show.addEventListener('click', () => { $('#hiddenText', host).hidden = false; show.remove(); });
+      if (it.t === 'price') {
+        const submit = () => {
+          const v = parsePrice($('#ans', host).value);
+          if (v == null) { toast('اكتب رقمًا'); return; }
+          answer(v === it.amount, v);
+        };
+        $('[data-act="submit"]', host).addEventListener('click', submit);
+        $('#ans', host).addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+      } else {
+        $$('.option', host).forEach(b => b.addEventListener('click', () => {
+          const i = +b.dataset.opt;
+          markOptions(host, i, it.correct);
+          answer(i === it.correct, i);
+        }));
+      }
+      play();
+    }
+    function answer(ok, given) {
+      const it = items[idx];
+      results.push({ ok, it, given });
+      let detail = '';
+      if (it.t === 'price') {
+        $('[data-act="submit"]', host).disabled = true;
+        $('#ans', host).disabled = true;
+        detail = `<span class="say" lang="en" dir="ltr" style="display:block">${esc(fmtPrice(it.amount))} — ${esc(priceWords(it.amount))}</span>`;
+      } else {
+        detail = `<span class="say" lang="en" dir="ltr" style="display:block">${esc(it.text)}</span>` +
+          (it.t === 'respond' ? `<span class="gloss">${esc(it.phrase.kAr)}</span>` : `<span class="gloss">${esc(it.phrase.cAr)}</span>`);
+      }
+      $('#qfb', host).innerHTML = feedback(ok, ok ? 'صحيح!' : 'ليست هذه الإجابة.', detail);
+      $('#qnext', host).innerHTML = `<button class="btn block" type="button" data-act="next">${idx + 1 < items.length ? 'التالي' : 'النتيجة'} ${icon('next')}</button>`;
+      $('[data-act="next"]', host).addEventListener('click', () => { idx++; if (idx < items.length) draw(); else onFinish(results); });
+      $('[data-act="next"]', host).focus({ preventScroll: true });
+    }
+    draw();
+  }
+
+  function stepListen({ unit, u, host, nextBtn }) {
+    function start() {
+      const items = shuffle(unit.phrases).slice(0, 8).map(p => makeMeaningItem(p));
+      runQuiz(host, items, {
+        onFinish(results) {
+          const score = pct(results.filter(r => r.ok).length, results.length);
+          markStep(u, 'listen', score);
+          host.innerHTML = `
+            <div class="card stack center">
+              <p class="muted">النتيجة</p>
+              <div class="price-tag" style="font-size:2.6rem">${results.filter(r => r.ok).length}/${results.length}</div>
+              <p>${score >= 75 ? 'فهمٌ ممتاز للعميل!' : 'استمع إلى العبارات مرة أخرى ثم أعد المحاولة.'}</p>
+            </div>
+            <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} أعد المحاولة</button>
+            ${nextBtn()}`;
+          $('[data-act="again"]', host).addEventListener('click', start);
+        }
+      });
+    }
+    start();
+  }
+
+  // Joint construction: choose each of your turns, with support.
+  function stepBuild({ unit, u, host, nextBtn }) {
+    const lines = unit.roleplay.lines;
+    let idx = 0, mistakes = 0, turns = 0;
+    host.innerHTML = `
+      <div class="card stack">
+        <h3>${esc(unit.roleplay.title.ar)} ${enSpan(unit.roleplay.title.en, 'small muted')}</h3>
+        <p class="muted small">${esc(unit.roleplay.setting.ar)} — ابنِ الحوار معنا: في كل دور لك، اختر الجملة المناسبة.</p>
+      </div>
+      <div class="dialogue" id="built"></div>
+      <div id="choice"></div>
+      <div id="buildEnd"></div>`;
+    const built = $('#built', host);
+    const addBubble = l => {
+      built.insertAdjacentHTML('beforeend', `
+        <button class="bubble ${l.s}" type="button" data-say="${esc(l.en)}" data-role="${l.s}">
+          <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
+          <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
+          <span class="gloss">${esc(l.ar)}</span>
+        </button>`);
+      built.lastElementChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    async function advance() {
+      const custLines = [];
+      while (idx < lines.length && lines[idx].s === 'c') { addBubble(lines[idx]); custLines.push(lines[idx]); idx++; }
+      if (idx >= lines.length) { finish(); playLines(custLines); return; }
+      const line = lines[idx];
+      turns++;
+      const opts = shuffle([line.en, ...respDistractors(line.en, line.f, unit.id, 2)]);
+      const correct = opts.indexOf(line.en);
+      $('#choice', host).innerHTML = `
+        <div class="card stack">
+          <p class="small muted">دورك: اختر ما تقوله</p>
+          ${optionButtons(opts, true)}
+          <div id="bfb"></div>
+        </div>`;
+      $$('#choice .option', host).forEach(b => b.addEventListener('click', () => {
+        const i = +b.dataset.opt;
+        if (i === correct) {
+          $('#choice', host).innerHTML = '';
+          addBubble(line);
+          idx++;
+          say(line.en, 'k').then(() => { if (host.isConnected) advance(); });
+        } else {
+          mistakes++;
+          b.classList.add('wrong');
+          b.disabled = true;
+          $('#bfb', host).innerHTML = feedback(false, 'ليست الأنسب هنا. جرّب مرة أخرى.', `تلميح: ${esc(line.ar)}`);
+        }
+      }));
+      if (custLines.length) await playLines(custLines);
+    }
+    function finish() {
+      const score = pct(turns, turns + mistakes);
+      markStep(u, 'build', score);
+      $('#choice', host).innerHTML = '';
+      $('#buildEnd', host).innerHTML = `
+        <div class="stack">
+          ${feedback(true, 'بنيت الحوار كاملًا!', 'في الخطوة التالية ستقوله بنفسك دون خيارات.')}
+          <button class="btn ghost block" type="button" data-act="play-all">${icon('play')} استمع للحوار كاملًا</button>
+          ${nextBtn()}
+        </div>`;
+      wirePlayAll(host, lines);
+    }
+    advance();
+  }
+
+  // Independent construction: say your turns with only an Arabic cue.
+  function stepRoleplay({ unit, u, host, nextBtn }) {
+    const lines = unit.roleplay.lines;
+    const kTurns = lines.filter(l => l.s === 'k').length;
+    let idx = 0, said = 0, micDisabled = false;
+    host.innerHTML = `
+      <div class="card stack">
+        <h3>${esc(unit.roleplay.title.ar)} ${enSpan(unit.roleplay.title.en, 'small muted')}</h3>
+        <p class="muted small">الآن دون خيارات: يتكلم العميل، وتقول أنت جملتك بالإنجليزية. ${micOn() ? 'اضغط الميكروفون وتكلم.' : 'قلها بصوت عالٍ ثم أظهر الإجابة.'}</p>
+      </div>
+      <div class="dialogue" id="rpLog"></div>
+      <div id="turn"></div>`;
+    const log = $('#rpLog', host);
+    const addBubble = l => {
+      log.insertAdjacentHTML('beforeend', `
+        <button class="bubble ${l.s}" type="button" data-say="${esc(l.en)}" data-role="${l.s}">
+          <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
+          <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
+        </button>`);
+      log.lastElementChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    async function advance() {
+      const turnBox = $('#turn', host);
+      if (!turnBox) return;
+      turnBox.innerHTML = '';
+      while (idx < lines.length && lines[idx].s === 'c') {
+        const l = lines[idx];
+        addBubble(l);
+        idx++;
+        await say(l.en, 'c');
+        if (!host.isConnected) return;
+      }
+      if (idx >= lines.length) { finish(); return; }
+      const line = lines[idx];
+      const words = line.en.split(' ');
+      turnBox.innerHTML = `
+        <div class="card stack">
+          <p class="small muted">دورك. قل بالإنجليزية:</p>
+          <p class="prompt-ar" style="font-size:1.08rem;font-weight:600">${esc(line.ar)}</p>
+          ${micOn() && !micDisabled ? `<button class="mic-btn" type="button" data-act="mic" aria-label="تكلم">${icon('mic')}</button><p class="heard" id="heard" aria-live="polite"></p>` : ''}
+          <div class="row wrap" style="justify-content:center">
+            <button class="btn ghost small" type="button" data-act="hint">${icon('eye')} تلميح</button>
+            <button class="btn soft small" type="button" data-act="reveal">أظهر الإجابة</button>
+          </div>
+          <p class="say small muted" lang="en" dir="ltr" id="hint" hidden>${esc(words.slice(0, 2).join(' '))} …</p>
+          <div id="rpfb"></div>
+        </div>`;
+      $('[data-act="hint"]', turnBox).addEventListener('click', e => { $('#hint', turnBox).hidden = false; e.currentTarget.remove(); });
+      $('[data-act="reveal"]', turnBox).addEventListener('click', () => reveal(line, null));
+      const mic = $('[data-act="mic"]', turnBox);
+      if (mic) mic.addEventListener('click', () => listenFor(line, mic));
+    }
+    async function listenFor(line, btn) {
+      if (btn.classList.contains('listening')) { Mic.stop(); return; }
+      btn.classList.add('listening');
+      $('#heard', host).textContent = 'أستمع…';
+      try {
+        const alts = await Mic.listen();
+        if (!host.isConnected) return;
+        btn.classList.remove('listening');
+        if (!alts.length) { $('#heard', host).textContent = 'لم أسمع شيئًا. حاول مرة أخرى.'; return; }
+        const r = compareSpeech(line.en, alts);
+        $('#heard', host).textContent = `سمعت: “${r.heard}”`;
+        if (r.score >= 0.75) reveal(line, true);
+        else {
+          const marked = r.words.map((w, i) => r.marks[i] ? esc(w) : `<mark>${esc(w)}</mark>`).join(' ');
+          $('#rpfb', host).innerHTML = feedback(false, r.score >= 0.5 ? 'قريب! حاول مرة أخرى.' : 'حاول مرة أخرى، أو اضغط «تلميح».',
+            r.score >= 0.5 ? `<span class="say small" lang="en" dir="ltr" style="display:block">${marked}</span>` : '');
+        }
+      } catch (err) {
+        btn.classList.remove('listening');
+        const msg = err === 'not-allowed' || err === 'service-not-allowed' ? 'اسمح للمتصفح باستخدام الميكروفون، أو تابع دونه.'
+          : err === 'network' ? 'التعرّف على الصوت يحتاج إلى اتصال بالإنترنت.'
+          : err === 'no-speech' ? 'لم أسمع شيئًا. حاول مرة أخرى.' : 'تعذّر استخدام الميكروفون.';
+        if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'network' || err === 'unsupported') { micDisabled = true; btn.remove(); }
+        const heard = $('#heard', host);
+        if (heard) heard.textContent = msg; else toast(msg);
+      }
+    }
+    async function reveal(line, ok) {
+      const turnBox = $('#turn', host);
+      if (ok) said++;
+      addBubble(line);
+      idx++;
+      if (ok) {
+        turnBox.innerHTML = feedback(true, 'ممتاز! قلتها بشكل صحيح.');
+        await say(line.en, 'k');
+        if (host.isConnected) advance();
+        return;
+      }
+      turnBox.innerHTML = `
+        <div class="card stack">
+          <p class="small muted">هذه الجملة النموذجية. هل قلتها هكذا تقريبًا؟</p>
+          <div class="row wrap" style="justify-content:center">
+            <button class="btn small" type="button" data-act="yes">${icon('check')} نعم</button>
+            <button class="btn ghost small" type="button" data-act="no">أحتاج تدريبًا</button>
+          </div>
+        </div>`;
+      say(line.en, 'k');
+      $('[data-act="yes"]', turnBox).addEventListener('click', () => { said++; advance(); });
+      $('[data-act="no"]', turnBox).addEventListener('click', () => advance());
+    }
+    function finish() {
+      const score = pct(said, kTurns);
+      markStep(u, 'roleplay', score);
+      $('#turn', host).innerHTML = `
+        <div class="stack">
+          ${feedback(true, `انتهى الحوار! قلت ${said} من ${kTurns} جمل بشكل صحيح.`, 'كرره مع زميل في الورشة أو في استراحة العمل.')}
+          <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} من البداية</button>
+          ${nextBtn()}
+        </div>`;
+      $('[data-act="again"]', host).addEventListener('click', () => stepRoleplay({ unit, u, host, nextBtn }));
+    }
+    advance();
+  }
+
+  // Fluency: 60 seconds with familiar material, two choices, fast.
+  function stepSpeed({ unit, u, host, nextBtn }) {
+    const key = 'speed-' + u;
+    const usable = p => !p.noR;
+    const current = unit.phrases.filter(usable);
+    const earlier = UNITS.slice(0, unitIndex(u)).flatMap(x => x.phrases).filter(usable);
+    function intro() {
+      host.innerHTML = `
+        <div class="card stack center">
+          <div class="empty" style="padding:8px">${icon('bolt')}</div>
+          <h3>60 ثانية</h3>
+          <p>اقرأ ما يقوله العميل واختر ردك بأسرع ما يمكن. العبارات مألوفة لك، والهدف هو السرعة والطلاقة.</p>
+          ${S.best[key] ? `<p class="pill good">أفضل نتيجة: ${S.best[key]}</p>` : ''}
+          <button class="btn block" type="button" data-act="go">ابدأ</button>
+        </div>`;
+      $('[data-act="go"]', host).addEventListener('click', run);
+    }
+    function run() {
+      const total = 60;
+      const t0 = Date.now();
+      let score = 0, answered = 0, item;
+      host.innerHTML = `
+        <div class="stack">
+          <div class="activity-head">${progressBar(100)}<span class="counter num" id="tleft">60</span></div>
+          <div class="card prompt-card"><p class="say big" lang="en" dir="ltr" id="sq"></p></div>
+          <div id="sopts"></div>
+          <p class="center muted">النقاط: <span class="num" id="sscore">0</span></p>
+        </div>`;
+      const bar = $('.progress > span', host);
+      function nextItem() {
+        const p = earlier.length && Math.random() < 0.3 ? pick(earlier) : pick(current);
+        const wrong = respDistractors(p.k, p.f, p.unit, 1)[0];
+        const options = shuffle([p.k, wrong]);
+        item = { correct: options.indexOf(p.k) };
+        $('#sq', host).textContent = pick(p.c);
+        $('#sopts', host).innerHTML = optionButtons(options, true);
+        $$('#sopts .option', host).forEach(b => b.addEventListener('click', () => {
+          const ok = +b.dataset.opt === item.correct;
+          answered++;
+          if (ok) score++;
+          b.classList.add(ok ? 'correct' : 'wrong');
+          $('#sscore', host).textContent = score;
+          $$('#sopts .option', host).forEach(x => { x.disabled = true; });
+          setTimeout(() => { if (host.isConnected && Date.now() - t0 < total * 1000) nextItem(); }, ok ? 180 : 450);
+        }));
+      }
+      nextItem();
+      const timer = setInterval(() => {
+        const left = Math.max(0, total - (Date.now() - t0) / 1000);
+        bar.style.width = (100 * left) / total + '%';
+        $('#tleft', host).textContent = Math.ceil(left);
+        if (left <= 0) { clearInterval(timer); end(score, answered); }
+      }, 200);
+      onLeave(() => clearInterval(timer));
+    }
+    function end(score, answered) {
+      const best = Math.max(S.best[key] || 0, score);
+      const isBest = score > (S.best[key] || 0);
+      S.best[key] = best;
+      markStep(u, 'speed', score);
+      host.innerHTML = `
+        <div class="card stack center">
+          <p class="muted">إجابات صحيحة في دقيقة</p>
+          <div class="price-tag">${score}</div>
+          <p class="muted small">من ${answered} محاولة</p>
+          ${isBest ? '<p class="pill good">رقم قياسي جديد!</p>' : `<p class="pill">أفضل نتيجة: ${best}</p>`}
+        </div>
+        <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} جولة أخرى</button>
+        ${nextBtn()}`;
+      $('[data-act="again"]', host).addEventListener('click', run);
+    }
+    intro();
+  }
+
+  function stepCheck({ unit, u, host, nextBtn }) {
+    const priceCount = unit.plos.includes('PLO4') ? (u === 'u4' ? 3 : 2) : 0;
+    function start() {
+      const ps = shuffle(unit.phrases);
+      const respond = ps.filter(p => !p.noR).slice(0, 5 - priceCount);
+      const meaning = ps.filter(p => !respond.includes(p)).slice(0, 5);
+      const items = [];
+      meaning.forEach(p => items.push(makeMeaningItem(p)));
+      respond.forEach(p => items.push(makeRespondItem(p)));
+      for (let k = 0; k < priceCount; k++) items.push(makePriceItem(randomPrice()));
+      runQuiz(host, shuffle(items), { showText: 'none', onFinish: finish });
+    }
+    function finish(results) {
+      const correct = results.filter(r => r.ok).length;
+      const score = pct(correct, results.length);
+      const passed = score >= P.meta.passMark;
+      S.checks[u] = (S.checks[u] || []).concat([{ pct: score, at: Date.now() }]);
+      if (passed) markStep(u, 'check', score); else save();
+      const wrong = results.filter(r => !r.ok);
+      const pulse = S.pulses[u] || {};
+      host.innerHTML = `
+        <div class="card stack center">
+          <p class="muted">نتيجة اختبار الوحدة</p>
+          <div class="price-tag">${score}%</div>
+          <p class="pill ${passed ? 'good' : 'amber'}">${passed ? 'اجتزت الوحدة!' : `تحتاج ${P.meta.passMark}% لاجتياز الوحدة`}</p>
+        </div>
+        ${wrong.length ? `
+        <details class="acc">
+          <summary>راجع الأخطاء (${wrong.length}) <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body">${wrong.map(r => r.it.t === 'price'
+            ? `<div class="card tight"><p class="say" lang="en" dir="ltr">${esc(fmtPrice(r.it.amount))} — ${esc(priceWords(r.it.amount))}</p></div>`
+            : `<div class="card tight stack" style="gap:4px"><p class="say" lang="en" dir="ltr">${esc(r.it.text)}</p>
+                ${r.it.t === 'respond' ? `<p class="say small" lang="en" dir="ltr" style="color:var(--good)">${esc(r.it.phrase.k)}</p>` : ''}
+                <p class="gloss">${esc(r.it.t === 'respond' ? r.it.phrase.kAr : r.it.phrase.cAr)}</p></div>`).join('')}</div>
+        </details>` : ''}
+        <div class="card stack">
+          <h3>رأيك في الوحدة ${enSpan('Unit pulse', 'small muted')}</h3>
+          <p class="small">ما مدى فائدة هذه الوحدة لعملك؟</p>
+          <div class="scale" id="pUseful">${[1, 2, 3, 4, 5].map(v => `<label><input type="radio" name="useful" value="${v}" ${pulse.useful === v ? 'checked' : ''}><span class="num">${v}</span></label>`).join('')}</div>
+          <p class="muted small" style="display:flex;justify-content:space-between"><span>قليلة</span><span>كبيرة جدًا</span></p>
+          <p class="small">مستوى الصعوبة:</p>
+          <div class="scale">${[['easy', 'سهلة جدًا'], ['right', 'مناسبة'], ['hard', 'صعبة جدًا']].map(([v, l]) => `<label><input type="radio" name="level" value="${v}" ${pulse.level === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+          <label class="field">تعليق (اختياري)<textarea class="input" id="pComment" rows="2">${esc(pulse.comment || '')}</textarea></label>
+          <button class="btn soft" type="button" data-act="pulse">إرسال الرأي</button>
+        </div>
+        <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} أعد الاختبار</button>
+        ${passed ? nextBtn() : `<a class="btn ghost block" href="#/unit/${u}/phrases">راجع العبارات</a>`}`;
+      $('[data-act="again"]', host).addEventListener('click', start);
+      $('[data-act="pulse"]', host).addEventListener('click', e => {
+        const useful = $('input[name="useful"]:checked', host);
+        const level = $('input[name="level"]:checked', host);
+        if (!useful || !level) { toast('اختر الفائدة والصعوبة من فضلك'); return; }
+        S.pulses[u] = { useful: +useful.value, level: level.value, comment: $('#pComment', host).value.trim().slice(0, 500), at: Date.now() };
+        save();
+        e.currentTarget.disabled = true;
+        e.currentTarget.textContent = 'شكرًا لرأيك';
+      });
+    }
+    host.innerHTML = `
+      <div class="card stack">
+        <h3>اختبار الوحدة</h3>
+        <p>10 أسئلة: فهم العميل واختيار الرد المناسب${priceCount ? ' وكتابة الأسعار' : ''}. تحتاج ${P.meta.passMark}% لاجتياز الوحدة، ويمكنك الإعادة.</p>
+        <p class="muted small">هذا اختبار تكويني يساعدك على معرفة مستواك. المهارات الشفهية تُقيَّم في لعب الأدوار مع المدربين.</p>
+        ${checkBest(u) != null ? `<p class="pill">أفضل نتيجة سابقة: ${checkBest(u)}%</p>` : ''}
+        <button class="btn block" type="button" data-act="start">ابدأ</button>
+      </div>`;
+    $('[data-act="start"]', host).addEventListener('click', start);
+  }
+
+  function stepMission({ unit, u, host }) {
+    const m = S.missions[u];
+    host.innerHTML = `
+      <div class="card stack">
+        <div class="row"><span class="unit-badge">${icon('briefcase')}</span><h3 class="grow">مهمة هذا الأسبوع</h3></div>
+        <p>${rich(unit.mission.ar)}</p>
+        <p class="en small muted ltr" lang="en">${esc(unit.mission.en)}</p>
+      </div>
+      <div class="card stack">
+        <h3>سجل المهمة ${enSpan('Mission log', 'small muted')}</h3>
+        <label class="field">كم مرة استخدمت الإنجليزية مع عملاء هذا الأسبوع؟
+          <input class="input num" id="mCount" type="number" inputmode="numeric" min="0" max="999" value="${m && m.count != null ? esc(m.count) : ''}">
+        </label>
+        <label class="field">ماذا حدث؟ ماذا قلت؟ ما الذي كان صعبًا؟ (بالعربية أو الإنجليزية)
+          <textarea class="input" id="mNote" rows="4">${esc(m ? m.note : '')}</textarea>
+        </label>
+        <button class="btn" type="button" data-act="save">${m ? 'تحديث السجل' : 'أنجزت المهمة'}</button>
+        ${m ? `<p class="muted small">آخر تحديث: ${fmtDate(m.at)}</p>` : ''}
+        <p class="muted small">يراجع المدرب سجلات المهام في ورشة الأسبوع.</p>
+      </div>
+      <a class="btn ghost block" href="#/unit/${u}">العودة إلى الوحدة</a>`;
+    $('[data-act="save"]', host).addEventListener('click', () => {
+      const c = $('#mCount', host).value;
+      S.missions[u] = { count: c === '' ? null : clamp(parseInt(c, 10) || 0, 0, 999), note: $('#mNote', host).value.trim().slice(0, 2000), at: Date.now() };
+      markStep(u, 'mission');
+      toast('حُفظ سجل المهمة');
+      stepMission({ unit, u, host });
+    });
+  }
+
+  // =====================================================================
+  // Practice
+  // =====================================================================
+  function viewPractice() {
+    setBar('التدريب', 'Practice');
+    const due = srsDue().length;
+    const tile = (href, ic, title, sub) => `
+      <a class="card unit-card" href="${href}">
+        <span class="unit-badge">${icon(ic)}</span>
+        <span class="grow"><strong>${title}</strong><br><span class="muted small">${sub}</span></span>
+        <span class="chev">${icon('next')}</span>
+      </a>`;
+    view.innerHTML = `
+      <div class="stack">
+        ${tile('#/review', 'cards', `المراجعة اليومية${due ? ` · ${due}` : ''}`, 'العبارات التي تعلمتها، في الوقت المناسب لتثبيتها')}
+        ${tile('#/numbers', 'hash', 'الأرقام والأسعار', 'استمع واكتب، اقرأ وقل، و13 أم 30؟')}
+        ${tile('#/dialogues', 'chat', 'الحوارات', 'كل حوارات الوحدات، مع إخفاء دورك للتدريب')}
+        ${tile('#/watch', 'alert', 'انتبه!', 'كلمات خادعة وأرقام متشابهة')}
+        <button class="card unit-card" type="button" data-help>
+          <span class="unit-badge">${icon('help')}</span>
+          <span class="grow"><strong>مساعدة سريعة</strong><br><span class="muted small">عبارات الطوارئ أثناء العمل</span></span>
+        </button>
+      </div>`;
+  }
+
+  function viewNumbers() {
+    setBar('الأرقام والأسعار', 'Numbers and prices');
+    let mode = 'listen', right = 0, total = 0;
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="seg" role="group" aria-label="نوع التدريب">
+          <button type="button" data-mode="listen" aria-pressed="true">استمع واكتب</button>
+          <button type="button" data-mode="say" aria-pressed="false">اقرأ وقل</button>
+          <button type="button" data-mode="pairs" aria-pressed="false">13 أم 30؟</button>
+        </div>
+        <p class="center muted small">الجلسة: <span class="num" id="nScore">0/0</span></p>
+        <div id="nBody" class="stack"></div>
+      </div>`;
+    const body = $('#nBody');
+    const setScore = () => { $('#nScore').textContent = `${right}/${total}`; };
+    $$('.seg button').forEach(b => b.addEventListener('click', () => {
+      mode = b.dataset.mode;
+      $$('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      right = 0; total = 0; setScore();
+      draw();
+    }));
+    function draw() {
+      stopAll();
+      if (mode === 'listen') drawListen(); else if (mode === 'say') drawSay(); else drawPairs();
+    }
+    function drawListen() {
+      const amount = randomPrice();
+      const text = Math.random() < 0.5 ? priceWords(amount) : priceShort(amount);
+      body.innerHTML = `
+        <div class="card prompt-card stack">
+          <button class="big-play" type="button" data-say="${esc(text)}" data-role="c" aria-label="استمع">${icon('play')}</button>
+          <p class="muted small">اكتب السعر الذي تسمعه</p>
+        </div>
+        <input class="num-input" id="nAns" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="السعر">
+        <button class="btn block" type="button" data-act="check">تحقق</button>
+        <div id="nFb"></div>`;
+      const check = () => {
+        const v = parsePrice($('#nAns').value);
+        if (v == null) { toast('اكتب رقمًا'); return; }
+        const ok = v === amount;
+        total++; if (ok) right++; setScore();
+        $('#nAns').disabled = true;
+        $('#nFb').innerHTML = feedback(ok, ok ? 'صحيح!' : `الصحيح: ${fmtPrice(amount)}`, `<span class="say" lang="en" dir="ltr" style="display:block">${esc(text)}</span>`) +
+          `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
+        $('[data-act="check"]', body).remove();
+        $('[data-act="next"]', body).addEventListener('click', drawListen);
+        $('[data-act="next"]', body).focus();
+      };
+      $('[data-act="check"]', body).addEventListener('click', check);
+      $('#nAns').addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+      say(text, 'c');
+    }
+    function drawSay() {
+      const amount = randomPrice();
+      const full = priceWords(amount), short = priceShort(amount);
+      body.innerHTML = `
+        <div class="card prompt-card stack">
+          <div class="price-tag">${esc(fmtPrice(amount))}<small>SAR</small></div>
+          <p class="muted">قل السعر بالإنجليزية</p>
+          ${micOn() ? `<button class="mic-btn" type="button" data-act="mic" aria-label="تكلم">${icon('mic')}</button><p class="heard" id="heard" aria-live="polite"></p>` : ''}
+          <button class="btn soft" type="button" data-act="reveal">أظهر الإجابة</button>
+        </div>
+        <div id="nAnswer" class="stack" hidden>
+          <div class="card stack">
+            <p class="small muted">الصيغة الكاملة</p>
+            <p class="say" lang="en" dir="ltr">${esc(full)}</p>
+            <div class="row">${audioBtns(full, 'k')}</div>
+            ${short !== full ? `<p class="small muted">الصيغة القصيرة (شائعة في الكلام)</p><p class="say" lang="en" dir="ltr">${esc(short)}</p><div class="row">${audioBtns(short, 'k', false)}</div>` : ''}
+          </div>
+          <div class="row wrap" style="justify-content:center">
+            <button class="btn small" type="button" data-act="yes">${icon('check')} قلتها صحيحة</button>
+            <button class="btn ghost small" type="button" data-act="no">أخطأت</button>
+          </div>
+        </div>`;
+      const reveal = () => { $('#nAnswer').hidden = false; const r = $('[data-act="reveal"]', body); if (r) r.remove(); };
+      $('[data-act="reveal"]', body).addEventListener('click', reveal);
+      $('[data-act="yes"]', body).addEventListener('click', () => { total++; right++; setScore(); drawSay(); });
+      $('[data-act="no"]', body).addEventListener('click', () => { total++; setScore(); drawSay(); });
+      const mic = $('[data-act="mic"]', body);
+      if (mic) mic.addEventListener('click', async () => {
+        if (mic.classList.contains('listening')) { Mic.stop(); return; }
+        mic.classList.add('listening');
+        $('#heard').textContent = 'أستمع…';
+        try {
+          const alts = await Mic.listen();
+          mic.classList.remove('listening');
+          if (!alts.length) { $('#heard').textContent = 'لم أسمع شيئًا.'; return; }
+          const r1 = compareSpeech(full, alts), r2 = compareSpeech(short, alts);
+          const r = r1.score >= r2.score ? r1 : r2;
+          $('#heard').textContent = `سمعت: “${r.heard}”` + (r.score >= 0.8 ? ' ✓' : '');
+          if (r.score >= 0.8) { total++; right++; setScore(); reveal(); $('[data-act="yes"]', body).parentElement.remove(); body.insertAdjacentHTML('beforeend', `<button class="btn block" type="button" data-act="nx">التالي ${icon('next')}</button>`); $('[data-act="nx"]', body).addEventListener('click', drawSay); }
+        } catch (err) {
+          mic.classList.remove('listening');
+          $('#heard').textContent = err === 'network' ? 'التعرّف على الصوت يحتاج إلى اتصال بالإنترنت.' : 'تعذّر استخدام الميكروفون.';
+        }
+      });
+    }
+    function drawPairs() {
+      const pair = pick(P.confusables);
+      const target = pick(pair);
+      const text = `${intWords(target)} riyals`;
+      body.innerHTML = `
+        <div class="card prompt-card stack">
+          <button class="big-play" type="button" data-say="${esc(text)}" data-role="c" aria-label="استمع">${icon('play')}</button>
+          <p class="muted small">أي رقم سمعت؟ انتبه للضغط: thir-TEEN أم THIR-ty</p>
+        </div>
+        <div class="grid-2">${pair.map(n => `<button class="option center" type="button" data-n="${n}" style="justify-content:center"><span class="price-tag" style="font-size:2rem">${n}</span></button>`).join('')}</div>
+        <div id="nFb"></div>`;
+      $$('[data-n]', body).forEach(b => b.addEventListener('click', () => {
+        const ok = +b.dataset.n === target;
+        total++; if (ok) right++; setScore();
+        $$('[data-n]', body).forEach(x => { x.disabled = true; if (+x.dataset.n === target) x.classList.add('correct'); else if (x === b) x.classList.add('wrong'); });
+        $('#nFb').innerHTML = feedback(ok, ok ? 'صحيح!' : `سمعت ${target}`, `<span class="say" lang="en" dir="ltr" style="display:block">${esc(text)}</span>`) +
+          `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
+        $('[data-act="next"]', body).addEventListener('click', drawPairs);
+      }));
+      say(text, 'c');
+    }
+    draw();
+  }
+
+  function viewReview() {
+    setBar('المراجعة اليومية', 'Spaced review');
+    const due = shuffle(srsDue()).slice(0, 20);
+    const learned = Object.keys(S.srs).filter(id => PH[id]);
+    if (!due.length) {
+      const next = learned.map(id => S.srs[id].due).sort()[0];
+      view.innerHTML = `
+        <div class="empty">${icon('check')}<p>${learned.length ? 'لا توجد عبارات للمراجعة اليوم.' : 'لم تضف عبارات بعد. ابدأ خطوة «العبارات المفتاحية» في أي وحدة.'}</p>
+          ${next ? `<p class="small">المراجعة القادمة: ${fmtDate(next)}</p>` : ''}</div>
+        ${learned.length ? `<button class="btn ghost block" type="button" data-act="extra">تدرّب على 10 عبارات عشوائية</button>` : `<a class="btn block" href="#/unit/${UNITS[0].id}/phrases">ابدأ</a>`}`;
+      const extra = $('[data-act="extra"]');
+      if (extra) extra.addEventListener('click', () => run(shuffle(learned).slice(0, 10)));
+      return;
+    }
+    run(due);
+    function run(queue) {
+      queue = queue.slice();
+      const requeued = new Set();
+      let done = 0;
+      const total = queue.length;
+      function draw() {
+        stopAll();
+        if (!queue.length) {
+          view.innerHTML = `
+            <div class="empty" style="color:var(--good)">${icon('award')}<p>أنهيت مراجعة ${total} ${total === 1 ? 'عبارة' : 'عبارات'}. أحسنت!</p></div>
+            <a class="btn block" href="#/">الرئيسية</a>`;
+          return;
+        }
+        const id = queue[0];
+        const p = PH[id];
+        const c = pick(p.c);
+        view.innerHTML = `
+          <div class="stack-lg">
+            <div class="activity-head">${progressBar(pct(done, total))}<span class="counter num">${done}/${total}</span></div>
+            <div class="card flash">
+              <span class="speaker c" style="align-self:center">العميل يقول</span>
+              <p class="say big" lang="en" dir="ltr">${esc(c)}</p>
+              <p class="gloss">${esc(p.cAr)}</p>
+              <div class="row" style="justify-content:center">${audioBtns(c, 'c', false)}</div>
+            </div>
+            <div id="back" hidden class="card flash">
+              <span class="speaker k" style="align-self:center">أنت تقول</span>
+              <p class="say big" lang="en" dir="ltr">${esc(p.k)}</p>
+              <p class="gloss">${esc(p.kAr)}</p>
+              <div class="row" style="justify-content:center">${audioBtns(p.k, 'k')}</div>
+            </div>
+            <button class="btn block" type="button" data-act="flip">ماذا تقول؟ أظهر الرد</button>
+            <div id="grades" hidden class="grid-2" style="grid-template-columns:repeat(3,1fr)">
+              <button class="btn ghost" type="button" data-g="0">مرة أخرى</button>
+              <button class="btn ghost" type="button" data-g="1">صعبة</button>
+              <button class="btn" type="button" data-g="2">سهلة</button>
+            </div>
+          </div>`;
+        say(c, 'c');
+        $('[data-act="flip"]').addEventListener('click', e => {
+          $('#back').hidden = false; $('#grades').hidden = false; e.currentTarget.remove();
+          say(p.k, 'k');
+        });
+        $$('[data-g]').forEach(b => b.addEventListener('click', () => {
+          const g = +b.dataset.g;
+          srsGrade(id, g);
+          queue.shift();
+          if (g === 0 && !requeued.has(id)) { requeued.add(id); queue.push(id); }
+          else done++;
+          draw();
+        }));
+      }
+      draw();
+    }
+  }
+
+  function viewDialogues() {
+    setBar('الحوارات', 'Conversations');
+    view.innerHTML = `<div class="stack">${UNITS.map((u, i) => `
+      <div class="card stack">
+        <p class="muted small">الوحدة ${i + 1}: ${esc(u.title.ar)}</p>
+        <a class="step" href="#/dialogue/${u.id}/model"><span class="ico">${icon('chat')}</span><span class="grow"><span class="title">${esc(u.model.title.ar)}</span><br><span class="strand">الحوار النموذجي · ${esc(u.model.setting.ar)}</span></span></a>
+        <a class="step" href="#/dialogue/${u.id}/roleplay"><span class="ico">${icon('mic')}</span><span class="grow"><span class="title">${esc(u.roleplay.title.ar)}</span><br><span class="strand">حوار لعب الأدوار · ${esc(u.roleplay.setting.ar)}</span></span></a>
+      </div>`).join('')}</div>`;
+  }
+
+  function viewDialogue({ u, which }) {
+    const unit = unitById(u);
+    const d = unit && (which === 'model' ? unit.model : which === 'roleplay' ? unit.roleplay : null);
+    if (!d) { go('#/dialogues'); return; }
+    setBar(d.title.ar, `الوحدة ${unitIndex(u) + 1} · ${d.setting.ar}`);
+    let hideK = false;
+    function draw() {
+      view.innerHTML = `
+        <div class="stack-lg">
+          <div class="card stack">
+            <h3>${esc(d.title.ar)} ${enSpan(d.title.en, 'small muted')}</h3>
+            <div class="row wrap">
+              <button class="btn" type="button" data-act="play-all">${icon('play')} استمع للحوار كاملًا</button>
+              <button class="btn ghost" type="button" data-act="hide" aria-pressed="${hideK}">${icon('eye')} ${hideK ? 'أظهر دوري' : 'أخفِ دوري'}</button>
+            </div>
+            ${hideK ? '<p class="muted small">قل دورك بصوت عالٍ، ثم اضغط على السطر لتراه وتسمعه.</p>' : ''}
+          </div>
+          ${dialogueHtml(d.lines, which === 'model' ? unit.stages : null, { hideK })}
+        </div>`;
+      wirePlayAll(view, d.lines);
+      $('[data-act="hide"]').addEventListener('click', () => { hideK = !hideK; draw(); });
+      $$('.bubble.hidden-line').forEach(b => b.addEventListener('click', () => {
+        const l = d.lines[+b.dataset.line];
+        b.classList.remove('hidden-line');
+        b.dataset.say = l.en; b.dataset.role = 'k';
+        say(l.en, 'k');
+      }, { once: true }));
+    }
+    draw();
+  }
+
+  function viewWatch() {
+    setBar('انتبه!', 'Watch out');
+    view.innerHTML = `
+      <div class="stack">
+        <p class="muted">كلمات تتشابه في النطق أو الشكل لكنها تختلف في المعنى، أو كلمات تُفهم خطأ عند الترجمة.</p>
+        ${P.watchOut.map(w => `
+          <div class="card stack">
+            <div class="row wrap">
+              <button class="pill amber" type="button" data-say="${esc(w.a)}" data-role="k" style="border:0;font-size:.95rem">${icon('volume')}<span lang="en" dir="ltr">${esc(w.a)}</span></button>
+              <span class="small">${esc(w.aAr)}</span>
+              ${w.b ? `<span class="muted small">≠</span>
+              <button class="pill" type="button" data-say="${esc(w.b)}" data-role="k" style="border:0;font-size:.95rem">${icon('volume')}<span lang="en" dir="ltr">${esc(w.b)}</span></button>
+              <span class="small">${esc(w.bAr)}</span>` : ''}
+            </div>
+            <p class="small">${rich(w.note)}</p>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  // =====================================================================
+  // Progress, record, final assessment, survey
+  // =====================================================================
+  function viewProgress() {
+    setBar('تقدّمي', 'My progress');
+    const passed = UNITS.filter(u => unitPassed(u.id)).length;
+    const selfMean = f => S.self[f] ? (P.outcomes.reduce((n, o) => n + (S.self[f][o.id] || 0), 0) / P.outcomes.length) : null;
+    const wkMinutes = [];
+    const start = S.profile.startedAt || addDays(dayKey(), -7 * (P.meta.weeks - 1));
+    for (let w = 0; w < P.meta.weeks; w++) {
+      const a = addDays(start, w * 7), b = addDays(start, w * 7 + 6);
+      wkMinutes.push(Math.round(secondsBetween(a, b) / 60));
+    }
+    const maxMin = Math.max(30, ...wkMinutes);
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="stat-grid">
+          <div class="stat"><div class="v">${passed}/${UNITS.length}</div><div class="l">وحدات مجتازة</div></div>
+          <div class="stat"><div class="v">${minutesTotal()}</div><div class="l">دقيقة دراسة</div></div>
+          <div class="stat"><div class="v">${Object.keys(S.missions).length}</div><div class="l">مهام عمل</div></div>
+        </div>
+
+        <div class="card stack">
+          <h3>اختبار الاستماع ${enSpan('Listening check', 'small muted')}</h3>
+          <div class="compare">
+            <div class="box"><div class="small muted">البداية</div><div class="v">${S.lc.entry ? `${S.lc.entry.score}/${S.lc.entry.total}` : '—'}</div></div>
+            <div class="arrow">${icon('next')}</div>
+            <div class="box"><div class="small muted">النهاية</div><div class="v">${S.lc.exit ? `${S.lc.exit.score}/${S.lc.exit.total}` : '—'}</div></div>
+          </div>
+          ${!S.lc.entry ? '<a class="btn soft small" href="#/lc/entry">أجرِ اختبار البداية</a>' : ''}
+        </div>
+
+        <div class="card stack">
+          <h3>التقييم الذاتي ${enSpan('Can-do self-assessment', 'small muted')}</h3>
+          ${S.self.entry ? `
+          <div class="bars">${P.outcomes.map(o => {
+            const a = (S.self.entry || {})[o.id] || 0, b = (S.self.exit || {})[o.id] || 0;
+            return `<div class="bar-row"><span>${esc(o.short.ar)}</span>
+              <div class="stack" style="gap:3px"><div class="progress"><span style="width:${a * 25}%;background:var(--ink-3)"></span></div>${S.self.exit ? `<div class="progress"><span style="width:${b * 25}%"></span></div>` : ''}</div>
+              <span class="v" dir="ltr">${a}${S.self.exit ? ` → ${b}` : ''}</span></div>`;
+          }).join('')}</div>
+          <p class="muted small">الرمادي: البداية${S.self.exit ? ' · الأخضر: النهاية' : ''} (من 4). المتوسط: <span dir="ltr">${selfMean('entry').toFixed(1)}${S.self.exit ? ` → ${selfMean('exit').toFixed(1)}` : ''}</span></p>`
+          : '<a class="btn soft small" href="#/self/entry">أجرِ التقييم الذاتي</a>'}
+        </div>
+
+        <div class="card stack">
+          <h3>اختبارات الوحدات ${enSpan('Unit checks', 'small muted')}</h3>
+          <div class="table-scroll"><table class="plain">
+            <thead><tr><th>الوحدة</th><th>الخطوات</th><th>أفضل نتيجة</th><th>محاولات</th><th>الفائدة</th></tr></thead>
+            <tbody>${UNITS.map((u, i) => `<tr>
+              <td>${i + 1}. ${esc(u.title.ar)}</td>
+              <td class="num">${unitStepsDone(u.id)}/${STEPS.length}</td>
+              <td class="num">${checkBest(u.id) != null ? `<span class="pill ${unitPassed(u.id) ? 'good' : 'amber'}">${checkBest(u.id)}%</span>` : '—'}</td>
+              <td class="num">${(S.checks[u.id] || []).length}</td>
+              <td class="num">${S.pulses[u.id] ? S.pulses[u.id].useful + '/5' : '—'}</td></tr>`).join('')}</tbody>
+          </table></div>
+        </div>
+
+        <div class="card stack">
+          <h3>وقت الدراسة حسب الأسبوع ${enSpan('Minutes per program week', 'small muted')}</h3>
+          <div class="bars">${wkMinutes.map((m, i) => `<div class="bar-row"><span>الأسبوع ${i + 1}</span>${progressBar(pct(m, maxMin))}<span class="v">${m}</span></div>`).join('')}</div>
+          <p class="muted small">الهدف: نحو ${P.meta.weeklyPattern[1].hours * 60} دقيقة أسبوعيًا على التطبيق. أيام النشاط: ${daysActive()}.</p>
+        </div>
+
+        <div class="stack">
+          <a class="btn block" href="#/record">${icon('award')} سجل التعلّم</a>
+          <a class="btn ghost block" href="#/final">التقييم الختامي</a>
+        </div>
+      </div>`;
+  }
+
+  function recordSummaryText() {
+    const lines = [];
+    lines.push(`${P.meta.title.en} — Learning record`);
+    lines.push(`Learner: ${S.profile.name || '—'}${S.profile.store ? ' (' + S.profile.store + ')' : ''}`);
+    lines.push(`Started: ${S.profile.startedAt || '—'} · Today: ${dayKey()}`);
+    UNITS.forEach((u, i) => lines.push(`Unit ${i + 1} ${u.title.en}: steps ${unitStepsDone(u.id)}/${STEPS.length}, check ${checkBest(u.id) != null ? checkBest(u.id) + '%' : '—'}, mission ${S.missions[u.id] ? 'done' : '—'}`));
+    lines.push(`Listening check: entry ${S.lc.entry ? S.lc.entry.score + '/' + S.lc.entry.total : '—'}, exit ${S.lc.exit ? S.lc.exit.score + '/' + S.lc.exit.total : '—'}`);
+    const sm = f => S.self[f] ? (P.outcomes.reduce((n, o) => n + (S.self[f][o.id] || 0), 0) / P.outcomes.length).toFixed(1) : '—';
+    lines.push(`Self-assessment (mean of 4): entry ${sm('entry')}, exit ${sm('exit')}`);
+    lines.push(`Study time: ${minutesTotal()} min over ${daysActive()} days`);
+    return lines.join('\n');
+  }
+  function exportData() {
+    const name = (S.profile.name || 'learner').replace(/[^\w؀-ۿ-]+/g, '-');
+    const blob = new Blob([JSON.stringify({ program: P.meta.id, version: P.meta.version, exportedAt: new Date().toISOString(), data: S }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${P.meta.id}-${name}-${dayKey()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  function viewRecord() {
+    setBar('سجل التعلّم', 'Learning record');
+    const sm = f => S.self[f] ? (P.outcomes.reduce((n, o) => n + (S.self[f][o.id] || 0), 0) / P.outcomes.length).toFixed(1) : '—';
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="card stack" id="record">
+          <div class="center stack" style="gap:2px">
+            <strong style="font-size:1.15rem">سجل التعلّم · ${enSpan('Learning record')}</strong>
+            <span class="muted small">${esc(P.meta.subtitle.ar)}</span>
+          </div>
+          <table class="plain">
+            <tr><th>المتدرب</th><td>${esc(S.profile.name || '—')}</td></tr>
+            <tr><th>المتجر</th><td>${esc(S.profile.store || '—')}</td></tr>
+            <tr><th>بداية البرنامج</th><td>${fmtDate(S.profile.startedAt)}</td></tr>
+            <tr><th>تاريخ السجل</th><td>${fmtDate(dayKey())}</td></tr>
+          </table>
+          <div class="table-scroll"><table class="plain">
+            <thead><tr><th>الوحدة</th><th>الخطوات</th><th>الاختبار</th><th>المهمة</th></tr></thead>
+            <tbody>${UNITS.map((u, i) => `<tr><td>${i + 1}. ${esc(u.title.ar)}</td><td class="num">${unitStepsDone(u.id)}/${STEPS.length}</td>
+              <td class="num">${checkBest(u.id) != null ? checkBest(u.id) + '%' : '—'}</td><td>${S.missions[u.id] ? '✓' : '—'}</td></tr>`).join('')}</tbody>
+          </table></div>
+          <table class="plain">
+            <tr><th>اختبار الاستماع</th><td class="num">البداية ${S.lc.entry ? `${S.lc.entry.score}/${S.lc.entry.total}` : '—'} · النهاية ${S.lc.exit ? `${S.lc.exit.score}/${S.lc.exit.total}` : '—'}</td></tr>
+            <tr><th>التقييم الذاتي (من 4)</th><td class="num"><span dir="ltr">${sm('entry')} → ${sm('exit')}</span></td></tr>
+            <tr><th>وقت الدراسة</th><td class="num">${minutesTotal()} دقيقة · ${daysActive()} يومًا</td></tr>
+          </table>
+          <p class="muted small">يوضح هذا السجل نشاط التطبيق فقط. تحقق المخرجات الشفهية يُقرَّر في لعب الأدوار الختامي الذي يقيّمه مدربان.</p>
+        </div>
+        <div class="grid-2 no-print">
+          <button class="btn" type="button" data-act="share">${icon('share')} مشاركة</button>
+          <button class="btn ghost" type="button" data-act="print">${icon('print')} طباعة</button>
+        </div>
+        <button class="btn ghost block no-print" type="button" data-act="export">${icon('download')} تنزيل البيانات (JSON)</button>
+      </div>`;
+    $('[data-act="print"]').addEventListener('click', () => window.print());
+    $('[data-act="export"]').addEventListener('click', exportData);
+    $('[data-act="share"]').addEventListener('click', async () => {
+      const text = recordSummaryText();
+      try {
+        if (navigator.share) { await navigator.share({ title: `${P.meta.title.en} — Learning record`, text }); return; }
+      } catch (e) { if (e && e.name === 'AbortError') return; }
+      try { await navigator.clipboard.writeText(text); toast('نُسخ السجل. الصقه في رسالة إلى المدرب.'); }
+      catch (e) { toast('تعذّرت المشاركة'); }
+    });
+  }
+
+  function viewFinal() {
+    setBar('التقييم الختامي', `الأسبوع ${P.meta.weeks}`);
+    const item = (href, ic, title, sub, done) => `
+      <a class="step ${done ? 'done' : ''}" href="${href}">
+        <span class="ico">${done ? icon('check') : icon(ic)}</span>
+        <span class="grow"><span class="title">${title}</span><br><span class="strand">${sub}</span></span>
+        <span class="chev muted">${icon('next')}</span>
+      </a>`;
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="card stack">
+          <p>في نهاية البرنامج تقيس ثلاثة أشياء في التطبيق، ثم تؤدي لعب الأدوار الختامي مع مدربين اثنين.</p>
+          ${UNITS.every(u => unitPassed(u.id)) ? '' : `<p class="pill amber">أكمل اختبارات الوحدات أولًا إن أمكن (${UNITS.filter(u => unitPassed(u.id)).length}/${UNITS.length})</p>`}
+        </div>
+        <div class="stack">
+          ${item('#/self/exit', 'clipboard', '1. التقييم الذاتي', 'المخرجات الستة من جديد', !!S.self.exit)}
+          ${item('#/lc/exit', 'headphones', '2. اختبار الاستماع الختامي', 'نموذج موازٍ بجمل جديدة', !!S.lc.exit)}
+          ${item('#/survey', 'star', '3. استبانة نهاية البرنامج', 'رأيك يساعدنا على تطوير البرنامج', !!S.survey)}
+          ${item('#/record', 'award', '4. سجل التعلّم', 'شاركه مع المدرب', false)}
+        </div>
+        <div class="note brand"><strong>لعب الأدوار الختامي:</strong> ثلاثة مواقف جديدة لم تتدرب عليها حرفيًا، يقيّمها مدربان بالمعايير الأربعة نفسها التي استُخدمت في التقييم التشخيصي.</div>
+        <p class="muted small">${P.rubric.criteria.map(c => esc(c.ar)).join(' · ')}</p>
+      </div>`;
+  }
+
+  function viewSelf({ form }) {
+    if (!['entry', 'exit'].includes(form)) { go('#/final'); return; }
+    setBar(form === 'entry' ? 'التقييم الذاتي: البداية' : 'التقييم الذاتي: النهاية', 'Self-assessment');
+    selfForm(view, form, () => { toast('حُفظ التقييم الذاتي'); go(form === 'entry' ? (S.lc.entry ? '#/units' : '#/lc/entry') : '#/final'); });
+  }
+
+  function viewListeningCheck({ form }) {
+    if (!['entry', 'exit'].includes(form)) { go('#/final'); return; }
+    setBar(form === 'entry' ? 'اختبار الاستماع: البداية' : 'اختبار الاستماع: النهاية', 'Listening check');
+    const prev = S.lc[form];
+    const intro = () => {
+      view.innerHTML = `
+        <div class="stack-lg">
+          <div class="card stack">
+            <p>عشرة أسئلة. الجزء أ: اكتب السعر الذي تسمعه. الجزء ب: اختر ما يريده العميل.</p>
+            <p class="muted small">يمكنك الاستماع مرتين لكل سؤال، ولا تظهر الإجابات الصحيحة حتى النهاية.</p>
+            ${prev ? `<p class="pill">نتيجتك السابقة: ${prev.score}/${prev.total} (${fmtDate(prev.at)})</p><p class="muted small">إعادة الاختبار تستبدل النتيجة السابقة.</p>` : ''}
+          </div>
+          <button class="btn block" type="button" data-act="start">${prev ? 'أعد الاختبار' : 'ابدأ'}</button>
+        </div>`;
+      $('[data-act="start"]').addEventListener('click', () => lcRunner(view, form, () => go(form === 'entry' ? '#/units' : '#/final')));
+    };
+    intro();
+  }
+
+  function viewSurvey() {
+    setBar('استبانة نهاية البرنامج', 'End-of-program survey');
+    const prev = S.survey || {};
+    view.innerHTML = `
+      <div class="stack-lg">
+        <p class="muted">إجاباتك تساعد فريق البرنامج على تطويره. لا توجد إجابة صحيحة أو خاطئة.</p>
+        ${P.feedback.survey.map(q => `
+          <fieldset class="card stack" style="border:1px solid var(--line)">
+            <legend class="sr-only">${esc(q.id)}</legend>
+            <p>${esc(q.ar)}</p>
+            <div class="scale">${AGREE_SCALE.map(s => `<label><input type="radio" name="${q.id}" value="${s.v}" ${prev[q.id] === s.v ? 'checked' : ''}><span>${esc(s.ar)}</span></label>`).join('')}</div>
+          </fieldset>`).join('')}
+        ${P.feedback.open.map(q => `
+          <label class="card field">${esc(q.ar)}<textarea class="input" id="${q.id}" rows="3">${esc(prev[q.id] || '')}</textarea></label>`).join('')}
+        <button class="btn block" type="button" data-act="save">إرسال</button>
+      </div>`;
+    $('[data-act="save"]').addEventListener('click', () => {
+      const out = { at: Date.now() };
+      let missing = 0;
+      P.feedback.survey.forEach(q => { const c = $(`input[name="${q.id}"]:checked`); if (c) out[q.id] = +c.value; else missing++; });
+      if (missing) { toast('أجب عن جميع العبارات من فضلك'); return; }
+      P.feedback.open.forEach(q => { out[q.id] = $('#' + q.id).value.trim().slice(0, 1000); });
+      S.survey = out;
+      save();
+      toast('شكرًا لك!');
+      go('#/final');
+    });
+  }
+
+  // =====================================================================
+  // Settings
+  // =====================================================================
+  function viewSettings() {
+    setBar('الإعدادات', 'Settings');
+    const st = S.settings;
+    const seg = (name, opts, cur) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button type="button" data-set="${name}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="card stack">
+          <h3>الملف الشخصي</h3>
+          <label class="field">الاسم<input class="input" id="sName" value="${esc(S.profile.name)}"></label>
+          <label class="field">المتجر أو القسم<input class="input" id="sStore" value="${esc(S.profile.store)}"></label>
+          <label class="field">تاريخ بداية البرنامج<input class="input num" id="sStart" type="date" value="${esc(S.profile.startedAt || '')}"></label>
+        </div>
+        <div class="card stack">
+          <h3>اللغة والصوت</h3>
+          <div class="switch-row"><span>إظهار الترجمة العربية</span><label class="switch"><input type="checkbox" id="sAr" ${st.ar ? 'checked' : ''}><span></span></label></div>
+          <p class="small">سرعة الكلام</p>
+          ${seg('rate', [[0.8, 'أبطأ'], [1, 'عادية'], [1.15, 'أسرع']], st.rate)}
+          <p class="small">لهجات العملاء</p>
+          ${seg('accent', [['mix', 'متنوعة'], ['us', 'أمريكية'], ['gb', 'بريطانية']], st.accent)}
+          <p class="muted small">«متنوعة» تستخدم ما يتوفر في جهازك من لهجات (هندية، بريطانية، أسترالية…) لأن عملاءك من بلدان كثيرة. الأصوات المتاحة: ${TTS.ok ? TTS.voiceCount() : 0}.</p>
+          <button class="btn ghost small" type="button" data-say="Hello! Welcome. How can I help you?" data-role="c">${icon('volume')} جرّب الصوت</button>
+          <div class="switch-row"><span>التدريب بالميكروفون ${Mic.ok ? '' : '<span class="muted small">(غير مدعوم في هذا المتصفح)</span>'}</span><label class="switch"><input type="checkbox" id="sMic" ${st.mic && Mic.ok ? 'checked' : ''} ${Mic.ok ? '' : 'disabled'}><span></span></label></div>
+        </div>
+        <div class="card stack">
+          <h3>المظهر</h3>
+          ${seg('theme', [['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'داكن']], st.theme)}
+        </div>
+        <a class="card unit-card" href="#/trainer">
+          <span class="unit-badge">${icon('users')}</span>
+          <span class="grow"><strong>للمدربين وفريق البرنامج</strong><br><span class="muted small">تصميم البرنامج، مصفوفة المواءمة، أدلة الورش، تقييم لعب الأدوار</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>
+        <div class="card stack">
+          <h3>البيانات</h3>
+          <p class="muted small">تُحفظ بياناتك على هذا الجهاز فقط. صدّرها لإرسالها إلى المدرب أو لنقلها إلى جهاز آخر.</p>
+          <div class="grid-2">
+            <button class="btn ghost" type="button" data-act="export">${icon('download')} تصدير</button>
+            <label class="btn ghost" style="cursor:pointer">${icon('upload')} استيراد<input type="file" accept="application/json,.json" id="sImport" hidden></label>
+          </div>
+          <button class="btn danger" type="button" data-act="reset">${icon('trash')} مسح كل البيانات</button>
+        </div>
+        <p class="center muted small">${esc(P.meta.title.en)} v${esc(P.meta.version)}</p>
+      </div>`;
+    const saveProfile = () => {
+      S.profile.name = $('#sName').value.trim().slice(0, 60);
+      S.profile.store = $('#sStore').value.trim().slice(0, 80);
+      const d = $('#sStart').value;
+      S.profile.startedAt = /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : S.profile.startedAt;
+      save();
+    };
+    ['#sName', '#sStore', '#sStart'].forEach(id => $(id).addEventListener('change', saveProfile));
+    $('#sAr').addEventListener('change', e => { st.ar = e.target.checked; save(); applySettings(); });
+    $('#sMic').addEventListener('change', e => { st.mic = e.target.checked; save(); });
+    $$('[data-set]').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.set;
+      st[k] = k === 'rate' ? +b.dataset.v : b.dataset.v;
+      save(); applySettings();
+      $$(`[data-set="${k}"]`).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    }));
+    $('[data-act="export"]').addEventListener('click', exportData);
+    $('#sImport').addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const obj = JSON.parse(r.result);
+          const data = obj && obj.data && obj.data.v === 2 ? obj.data : obj && obj.v === 2 ? obj : null;
+          if (!data) throw new Error('format');
+          if (!confirm('سيستبدل هذا بياناتك الحالية. هل تريد المتابعة؟')) return;
+          S = merge(fresh(), data);
+          save(); applySettings();
+          toast('تم الاستيراد');
+          render();
+        } catch (err) { toast('الملف غير صالح'); }
+      };
+      r.readAsText(f);
+    });
+    $('[data-act="reset"]').addEventListener('click', () => {
+      if (!confirm('سيُحذف كل تقدمك على هذا الجهاز نهائيًا. هل أنت متأكد؟')) return;
+      try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+      S = fresh();
+      applySettings();
+      go('#/');
+    });
+  }
+
+  // =====================================================================
+  // Trainer area
+  // =====================================================================
+  // Trainer pages are written for the program team in English, so they render left to right.
+  function trainerMode() { view.dir = 'ltr'; view.lang = 'en'; view.classList.add('trainer'); }
+  const fmtDateEn = v => new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const ltr = (s, cls = '') => `<span class="ltr ${cls}" lang="en" dir="ltr">${esc(s)}</span>`;
+  const biBlock = o => `<div class="stack" style="gap:2px">${ltr(o.en)}<span class="gloss small" dir="rtl" lang="ar">${rich(o.ar)}</span></div>`;
+
+  function viewTrainer() {
+    setBar('للمدربين', 'Trainers and program team');
+    const tile = (href, ic, title, sub) => `
+      <a class="card unit-card" href="${href}">
+        <span class="unit-badge">${icon(ic)}</span>
+        <span class="grow"><strong>${title}</strong><br><span class="muted small">${sub}</span></span>
+        <span class="chev">${icon('next')}</span>
+      </a>`;
+    view.innerHTML = `
+      <div class="stack">
+        ${tile('#/trainer/design', 'book', 'تصميم البرنامج · Program design', 'البيئة، الاحتياجات، المبادئ، المخرجات، المنهج، التقييم، التقويم')}
+        ${tile('#/trainer/matrix', 'grid', 'مصفوفة المواءمة · Alignment matrix', 'كل مخرج ومهمة تقيسه، وكل مهمة ومخرج تقيسه')}
+        ${tile('#/trainer/guide/' + UNITS[0].id, 'users', 'أدلة الورش · Workshop guides', 'خطة ساعتين لكل وحدة وفق دورة التعليم والتعلّم')}
+        ${tile('#/trainer/cards', 'cards', 'بطاقات لعب الأدوار · Role-play cards', 'التشخيصي والختامي، مع سلم التقدير')}
+        ${tile('#/trainer/rate', 'pen', 'تقييم لعب الأدوار · Rate a role-play', 'مقيّمان، أربعة معايير، وحساب الاتفاق')}
+        ${tile('#/trainer/ratings', 'chart', 'النتائج والاتفاق · Ratings and agreement', `${S.trainer.ratings.length} تقييم محفوظ على هذا الجهاز`)}
+        ${tile('#/trainer/align', 'clipboard', 'فحص المواءمة · Alignment check', 'مراجعان يربطان التقييم الختامي بالمخرجات قبل التجربة')}
+      </div>`;
+  }
+
+  function viewDesign() {
+    setBar('تصميم البرنامج', 'Program design');
+    trainerMode();
+    const D = P.design;
+    const list = arr => `<ul class="plain-list">${arr.map(x => `<li>${biBlock(x)}</li>`).join('')}</ul>`;
+    view.innerHTML = `
+      <div class="stack-lg">
+        <section class="hero stack">
+          <h2 class="ltr" lang="en">${esc(P.meta.title.en)}: ${esc(P.meta.subtitle.en)}</h2>
+          <p dir="rtl" lang="ar">${esc(P.meta.subtitle.ar)}</p>
+          <div class="meta">
+            <span class="pill">${P.meta.weeks} weeks</span><span class="pill">${P.meta.hours} hours</span>
+            <span class="pill">${esc(P.meta.mode.en)}</span><span class="pill">${esc(P.meta.entryLevel)} → ${esc(P.meta.exitLevel)}</span>
+          </div>
+          ${P.meta.designer || P.meta.context ? `<p class="small ltr" lang="en">${esc([P.meta.designer, P.meta.context].filter(Boolean).join(' · '))}</p>` : ''}
+        </section>
+
+        <details class="acc" open><summary>Approach · المنهج <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body">${biBlock(D.approach)}
+            <div class="table-scroll"><table class="plain">
+              <thead><tr><th>App step</th><th>Teaching-learning cycle</th><th>Strand (Nation)</th></tr></thead>
+              <tbody>${STEPS.map((s, i) => `<tr><td>${i + 1}. ${ltr(s.en)}</td><td>${ltr(CYCLE[s.cycle].en)}</td><td>${ltr(STRAND[s.strand].en)}</td></tr>`).join('')}</tbody>
+            </table></div>
+          </div></details>
+
+        <details class="acc"><summary>Environment analysis · تحليل البيئة <span class="chev">${icon('down')}</span></summary><div class="acc-body">${list(D.environment)}</div></details>
+        <details class="acc"><summary>Needs analysis · تحليل الاحتياجات <span class="chev">${icon('down')}</span></summary><div class="acc-body">${list(D.needs)}</div></details>
+        <details class="acc"><summary>Principles · المبادئ <span class="chev">${icon('down')}</span></summary><div class="acc-body">${list(D.principles)}</div></details>
+
+        <details class="acc" open><summary>Program learning outcomes · المخرجات <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body">${P.outcomes.map(o => `
+            <div class="card tight stack" style="gap:6px">
+              <div class="row"><span class="pill brand">${esc(o.id)}</span>${ltr(o.short.en, 'small muted')}</div>
+              ${biBlock(o)}
+              <p class="small ltr" lang="en"><strong>Assessed by:</strong> ${esc(P.assessments.filter(a => a.summative && a.plos.includes(o.id)).map(a => a.en).join('; '))}</p>
+            </div>`).join('')}</div></details>
+
+        <details class="acc"><summary>Syllabus · الخطة الدراسية <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body"><div class="table-scroll"><table class="plain">
+            <thead><tr><th>Week</th><th>Unit</th><th>Genre stages</th><th>PLOs</th><th>Hours</th></tr></thead>
+            <tbody>${UNITS.map((u, i) => `<tr><td class="num">${u.week}</td><td>${ltr(`${i + 1}. ${u.title.en}`)}<br><span class="gloss small" dir="rtl" lang="ar">${esc(u.title.ar)}</span></td>
+              <td>${ltr(uniq(u.model.lines.map(l => l.st)).map(id => (u.stages.find(s => s.id === id) || {}).en).join(' → '), 'small')}</td>
+              <td>${u.plos.join(', ')}</td><td class="num">${P.meta.hours / P.meta.weeks}</td></tr>`).join('')}</tbody>
+          </table></div>
+          <p class="small ltr" lang="en">Each week: ${esc(P.meta.weeklyPattern.map(w => `${w.hours} h ${w.en.toLowerCase()}`).join(' + '))}. Exit role-plays at the end of week ${P.meta.weeks}.</p>
+          </div></details>
+
+        <details class="acc"><summary>Assessment plan · خطة التقييم <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body">${P.assessments.map(a => `
+            <div class="card tight stack" style="gap:4px">
+              <div class="row wrap"><span class="pill ${a.summative ? 'good' : ''}">${a.summative ? 'Summative' : a.id === 'DX' ? 'Diagnostic' : 'Formative'}</span>${ltr(a.en)}</div>
+              <p class="small ltr" lang="en">${esc(a.when.en)} · ${esc(a.plos.join(', '))} · ${esc(a.note.en)}</p>
+            </div>`).join('')}
+            <a class="btn soft small" href="#/trainer/cards">Rubric and role-play cards</a></div></details>
+
+        <details class="acc"><summary>Evaluation plan · خطة التقويم <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body"><div class="table-scroll"><table class="plain">
+            <thead><tr><th>Who</th><th>With what</th><th>When</th></tr></thead>
+            <tbody>${P.evaluation.map(e => `<tr><td>${ltr(e.who.en)}</td><td>${ltr(e.what.en)}<br><span class="gloss small" dir="rtl" lang="ar">${esc(e.what.ar)}</span></td><td>${ltr(e.when.en)}</td></tr>`).join('')}</tbody>
+          </table></div></div></details>
+
+        <details class="acc"><summary>References <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body">${D.references.map(r => `<p class="small ltr" lang="en">${esc(r)}</p>`).join('')}</div></details>
+      </div>`;
+  }
+
+  function viewMatrix() {
+    setBar('مصفوفة المواءمة', 'Alignment matrix');
+    trainerMode();
+    const A = P.assessments;
+    const cell = (a, o) => a.plos.includes(o.id) ? (a.summative ? '<span class="dot full" title="Summative">●</span>' : '<span class="dot" title="Formative or diagnostic">○</span>') : '';
+    const noSummative = P.outcomes.filter(o => !A.some(a => a.summative && a.plos.includes(o.id)));
+    const noOutcome = A.filter(a => !a.plos.length);
+    const lcItems = P.listeningCheck.exit;
+    view.innerHTML = `
+      <div class="stack-lg">
+        <p class="small ltr" lang="en">Each program learning outcome is written with the task that assesses it. Read across a row to see how an outcome is assessed; read down a column to see what a task tests.</p>
+        <div class="card"><div class="table-scroll"><table class="plain matrix">
+          <thead><tr><th>PLO</th>${A.map(a => `<th title="${esc(a.en)}">${esc(a.id)}</th>`).join('')}</tr></thead>
+          <tbody>${P.outcomes.map(o => `<tr><th title="${esc(o.en)}">${esc(o.id)}<br><span class="muted small">${esc(o.short.en)}</span></th>${A.map(a => `<td>${cell(a, o)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table></div>
+        <ul class="plain-list small" style="margin-top:10px">${A.map(a => `<li>${ltr(`${a.id}: ${a.en} (${a.when.en}${a.where === 'app' ? ', in the app' : ', trainers'})`)}</li>`).join('')}</ul>
+        <p class="small muted ltr" lang="en">● summative (decides whether the outcome is met) · ○ diagnostic or formative</p></div>
+
+        <div class="card stack">
+          <h3 class="ltr" lang="en">Alignment checks</h3>
+          ${feedback(!noSummative.length, noSummative.length ? `Outcomes with no summative task: ${noSummative.map(o => o.id).join(', ')}` : 'Every outcome has at least one summative task.')}
+          ${feedback(!noOutcome.length, noOutcome.length ? `Tasks that test no outcome: ${noOutcome.map(a => a.id).join(', ')}` : 'Every task tests at least one outcome.')}
+          ${feedback(true, 'Spoken outcomes are certified by performance: exit role-plays, two raters, the diagnostic’s four criteria.')}
+        </div>
+
+        <div class="card stack">
+          <h3 class="ltr" lang="en">Where each outcome is practised</h3>
+          <div class="table-scroll"><table class="plain matrix">
+            <thead><tr><th>PLO</th>${UNITS.map((u, i) => `<th title="${esc(u.title.en)}">U${i + 1}</th>`).join('')}</tr></thead>
+            <tbody>${P.outcomes.map(o => `<tr><th>${esc(o.id)}</th>${UNITS.map(u => `<td>${u.plos.includes(o.id) ? '<span class="dot full">●</span>' : ''}</td>`).join('')}</tr>`).join('')}</tbody>
+          </table></div>
+        </div>
+
+        <div class="card stack">
+          <h3 class="ltr" lang="en">Listening check (exit form): item to outcome</h3>
+          <div class="table-scroll"><table class="plain">
+            <thead><tr><th>#</th><th>Item</th><th>PLO</th></tr></thead>
+            <tbody>${lcItems.map((it, i) => `<tr><td class="num">${i + 1}</td><td>${ltr(it.t === 'price' ? `Type the price: ${fmtPrice(it.amount)} (${priceWords(it.amount)})` : it.en, 'small')}</td><td>${esc(it.plo)}</td></tr>`).join('')}</tbody>
+          </table></div>
+        </div>
+      </div>`;
+  }
+
+  function viewGuide({ u }) {
+    const unit = unitById(u);
+    if (!unit) { go('#/trainer'); return; }
+    const i = unitIndex(u);
+    setBar(`دليل الورشة: الوحدة ${i + 1}`, unit.title.en);
+    trainerMode();
+    const stages = uniq(unit.model.lines.map(l => l.st)).map(id => unit.stages.find(s => s.id === id)).filter(Boolean);
+    const phases = [
+      { min: 15, t: CYCLE.field, body: biBlock(unit.workshop.field) },
+      { min: 25, t: CYCLE.model, body: `${biBlock({ en: `Play the model conversation “${unit.model.title.en}”. Learners label the stages: ${stages.map(s => s.en).join(' → ')}. Point out the key phrases for each stage.`, ar: `شغّل الحوار النموذجي «${unit.model.title.ar}». يحدد المتدربون مراحله: ${stages.map(s => s.ar).join(' ← ')}. أبرز العبارات المفتاحية لكل مرحلة.` })}
+          <a class="btn soft small" href="#/dialogue/${u}/model">${icon('play')} Model conversation</a>` },
+      { min: 25, t: CYCLE.joint, body: biBlock(unit.workshop.joint) },
+      { min: 35, t: CYCLE.independent, body: `${biBlock(unit.workshop.pairs)}${biBlock({ en: 'Peer feedback with the four role-play criteria, in simple words.', ar: 'تغذية راجعة بين الزملاء بالمعايير الأربعة بلغة بسيطة.' })}` },
+      { min: 20, t: { en: 'Review and mission', ar: 'المراجعة والمهمة' }, body: `${biBlock({ en: 'Review last week\'s mission logs and app progress. Set this week\'s mission:', ar: 'راجع سجلات مهمة الأسبوع الماضي وتقدم التطبيق. ثم حدد مهمة هذا الأسبوع:' })}${biBlock(unit.mission)}` }
+    ];
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="row wrap">${UNITS.map((x, n) => `<a class="pill ${x.id === u ? 'brand' : ''}" href="#/trainer/guide/${x.id}">U${n + 1}</a>`).join('')}</div>
+        <section class="hero stack">
+          <p class="small" style="opacity:.85">Week ${unit.week} · 120 minutes</p>
+          <h2 class="ltr" lang="en">${esc(unit.title.en)}</h2>
+          <p dir="rtl" lang="ar">${esc(unit.title.ar)}</p>
+          <div class="meta">${unit.plos.map(id => `<span class="pill">${esc(id)}</span>`).join('')}</div>
+        </section>
+        <div class="card stack"><h3 class="ltr" lang="en">Objectives</h3>${unit.objectives.map(biBlock).join('')}</div>
+        ${phases.map((p, n) => `
+          <div class="card stack">
+            <div class="row"><span class="pill brand num">${p.min} min</span><strong class="grow ltr" lang="en">${n + 1}. ${esc(p.t.en)}</strong></div>
+            <span class="gloss small" dir="rtl" lang="ar">${esc(p.t.ar)}</span>
+            ${p.body}
+          </div>`).join('')}
+        <div class="note stack" style="gap:4px"><strong>Watch out</strong><p dir="rtl" lang="ar">${rich(unit.watchOut.ar)}</p></div>
+        ${i === UNITS.length - 1 ? `<div class="note brand"><strong>Exit role-plays:</strong> <span class="ltr" lang="en">run X1–X3 at the end of this week with two raters.</span> <a href="#/trainer/cards">Cards</a> · <a href="#/trainer/rate">Rate</a></div>` : ''}
+      </div>`;
+  }
+
+  function rubricTable() {
+    const R = P.rubric;
+    return `<div class="table-scroll"><table class="plain rubric">
+      <thead><tr><th>Criterion</th>${R.scale.map(v => `<th class="num">${v}<br><span class="muted small">${esc(R.scaleLabels[v].en)}</span></th>`).join('')}</tr></thead>
+      <tbody>${R.criteria.map(c => `<tr><th>${ltr(c.en)}<br><span class="gloss small" dir="rtl" lang="ar">${esc(c.ar)}</span></th>${R.scale.map(v => `<td class="small">${ltr(c.d[v].en)}<br><span class="gloss" dir="rtl" lang="ar">${esc(c.d[v].ar)}</span></td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+    <p class="small ltr" lang="en">Outcome met when the mean of both raters' totals is at least ${R.passTotal}/${R.criteria.length * R.scale[R.scale.length - 1]} and no criterion mean is below ${R.minCriterion}. Raters who differ by more than ${R.maxGap} on a criterion discuss, or a third rater decides.</p>`;
+  }
+
+  function viewCards() {
+    setBar('بطاقات لعب الأدوار', 'Role-play cards and rubric');
+    trainerMode();
+    view.innerHTML = `
+      <div class="stack-lg">
+        <p class="small ltr" lang="en">The diagnostic and exit role-plays use the same four criteria. Exit scenarios use products and problems the units do not rehearse, so the measure does not depend on the exact sentences taught.</p>
+        ${P.roleplayCards.map(c => {
+          const a = ASSESS[c.id];
+          return `
+          <div class="card stack">
+            <div class="row wrap"><span class="pill ${a.summative ? 'good' : ''}">${esc(c.id)}</span><strong class="ltr" lang="en">${esc(a.en)}</strong></div>
+            <span class="gloss small" dir="rtl" lang="ar">${esc(a.ar)}</span>
+            <p class="small"><strong>Setting:</strong> ${ltr(c.setting.en)}</p>
+            <div class="note brand small"><strong>Learner task:</strong> ${ltr(c.learner.en)}<br><span dir="rtl" lang="ar">${esc(c.learner.ar)}</span></div>
+            <p class="small"><strong>Interlocutor (plays the customer):</strong></p>
+            <ol class="ltr small" lang="en" style="margin:0;padding-left:1.4em">${c.prompts.map(p => `<li>${esc(p)} <button class="audio-btn" type="button" data-say="${esc(p)}" data-role="c" style="min-height:28px;padding:2px 8px">${icon('volume')}</button></li>`).join('')}</ol>
+            <p class="small"><strong>What raters look for:</strong></p>
+            <ul class="plain-list small">${c.look.map(l => `<li><span class="pill brand">${esc(l.plo)}</span> ${ltr(l.en)} <span class="gloss" dir="rtl" lang="ar">— ${esc(l.ar)}</span></li>`).join('')}</ul>
+          </div>`;
+        }).join('')}
+        <div class="card stack"><h3 class="ltr" lang="en">Rubric (four criteria)</h3>${rubricTable()}</div>
+        <a class="btn block" href="#/trainer/rate">${icon('pen')} Rate a role-play</a>
+      </div>`;
+  }
+
+  function ratingResult(r) {
+    const R = P.rubric;
+    const per = R.criteria.map(c => {
+      const a = r.r1.scores[c.id], b = r.r2.scores[c.id];
+      return { id: c.id, a, b, mean: (a + b) / 2, gap: Math.abs(a - b) };
+    });
+    const t1 = per.reduce((n, x) => n + x.a, 0), t2 = per.reduce((n, x) => n + x.b, 0);
+    const mean = (t1 + t2) / 2;
+    const met = mean >= R.passTotal && per.every(x => x.mean >= R.minCriterion);
+    const flagged = per.filter(x => x.gap > R.maxGap).map(x => x.id);
+    return { per, t1, t2, mean, met, flagged, exact: per.filter(x => x.gap === 0).length, adjacent: per.filter(x => x.gap <= 1).length };
+  }
+
+  function viewRate() {
+    setBar('تقييم لعب الأدوار', 'Rate a role-play');
+    trainerMode();
+    const R = P.rubric;
+    function form(phase) {
+      const pend = S.trainer.pending;
+      const header = phase === 1
+        ? `<label class="field">Learner name or ID<input class="input" id="rLearner" value="${esc(pend ? pend.learner : '')}"></label>
+           <label class="field">Role-play<select class="input" id="rTask">${P.roleplayCards.map(c => `<option value="${c.id}">${esc(c.id)}: ${esc(ASSESS[c.id].en)}</option>`).join('')}</select></label>`
+        : `<div class="note brand"><strong>Rater 2</strong> <span class="ltr" lang="en">— rate independently. Rater 1's scores stay hidden until you save.</span><br>${esc(pend.learner)} · ${esc(pend.task)}</div>`;
+      view.innerHTML = `
+        <div class="stack-lg">
+          <div class="card stack">
+            ${header}
+            <label class="field">Rater ${phase} name<input class="input" id="rName"></label>
+          </div>
+          ${R.criteria.map(c => `
+            <fieldset class="card stack" style="border:1px solid var(--line)">
+              <legend class="sr-only">${esc(c.en)}</legend>
+              <strong class="ltr" lang="en">${esc(c.id)} ${esc(c.en)}</strong>
+              <span class="gloss small" dir="rtl" lang="ar">${esc(c.ar)}</span>
+              <div class="scale">${R.scale.map(v => `<label><input type="radio" name="${c.id}" value="${v}"><span class="num">${v}</span></label>`).join('')}</div>
+              <p class="small muted ltr" lang="en" id="d-${c.id}">Choose a level to see its descriptor.</p>
+            </fieldset>`).join('')}
+          <button class="btn block" type="button" data-act="save">Save rater ${phase}</button>
+          ${phase === 2 ? '<button class="btn ghost block" type="button" data-act="cancel">Cancel this rating</button>' : ''}
+        </div>`;
+      R.criteria.forEach(c => $$(`input[name="${c.id}"]`).forEach(inp => inp.addEventListener('change', () => {
+        $('#d-' + c.id).textContent = `${inp.value}: ${c.d[inp.value].en}`;
+      })));
+      const cancel = $('[data-act="cancel"]');
+      if (cancel) cancel.addEventListener('click', () => { S.trainer.pending = null; save(); form(1); });
+      $('[data-act="save"]').addEventListener('click', () => {
+        const scores = {};
+        const missing = R.criteria.filter(c => { const x = $(`input[name="${c.id}"]:checked`); if (x) scores[c.id] = +x.value; return !x; });
+        if (missing.length) { toast('Score all four criteria'); return; }
+        const rater = { name: $('#rName').value.trim().slice(0, 60), scores };
+        if (phase === 1) {
+          const learner = $('#rLearner').value.trim().slice(0, 80);
+          if (!learner) { toast('Enter the learner name or ID'); return; }
+          S.trainer.pending = { learner, task: $('#rTask').value, r1: rater, at: Date.now() };
+          save();
+          form(2);
+        } else {
+          const rec = { id: 'r' + Date.now().toString(36), learner: pend.learner, task: pend.task, r1: pend.r1, r2: rater, at: Date.now() };
+          S.trainer.ratings.push(rec);
+          S.trainer.pending = null;
+          save();
+          showResult(rec);
+        }
+        window.scrollTo(0, 0);
+      });
+    }
+    function showResult(rec) {
+      const res = ratingResult(rec);
+      view.innerHTML = `
+        <div class="stack-lg">
+          <div class="card stack">
+            <strong>${esc(rec.learner)} · ${esc(rec.task)}: ${ltr(ASSESS[rec.task].en)}</strong>
+            <div class="table-scroll"><table class="plain">
+              <thead><tr><th>Criterion</th><th>R1</th><th>R2</th><th>Mean</th><th>Gap</th></tr></thead>
+              <tbody>${res.per.map(x => `<tr><td>${ltr(P.rubric.criteria.find(c => c.id === x.id).en)}</td><td class="num">${x.a}</td><td class="num">${x.b}</td><td class="num">${x.mean.toFixed(1)}</td>
+                <td class="num">${x.gap > P.rubric.maxGap ? `<span class="pill bad">${x.gap}</span>` : x.gap}</td></tr>`).join('')}
+                <tr><th>Total</th><th class="num">${res.t1}</th><th class="num">${res.t2}</th><th class="num">${res.mean.toFixed(1)}</th><th></th></tr></tbody>
+            </table></div>
+            <p class="pill ${res.met ? 'good' : 'amber'}">${res.met ? 'Meets the standard' : 'Not yet at the standard'}</p>
+            ${res.flagged.length ? feedback(false, `Raters differ by more than ${P.rubric.maxGap} on ${res.flagged.join(', ')}.`, 'Discuss the evidence, or ask a third rater.') : feedback(true, 'Raters agree within one point on every criterion.')}
+          </div>
+          <a class="btn block" href="#/trainer/rate">Rate another</a>
+          <a class="btn ghost block" href="#/trainer/ratings">All ratings and agreement</a>
+        </div>`;
+    }
+    const pending = S.trainer.pending;
+    if (pending && pending.r1) form(2); else form(1);
+  }
+
+  function viewRatings() {
+    setBar('النتائج والاتفاق', 'Ratings and agreement');
+    trainerMode();
+    const list = S.trainer.ratings;
+    if (!list.length) {
+      view.innerHTML = `<div class="empty">${icon('chart')}<p>No ratings saved on this device yet.</p></div><a class="btn block" href="#/trainer/rate">Rate a role-play</a>`;
+      return;
+    }
+    const results = list.map(r => ({ r, res: ratingResult(r) }));
+    const n = results.length * P.rubric.criteria.length;
+    const exact = results.reduce((s, x) => s + x.res.exact, 0);
+    const adj = results.reduce((s, x) => s + x.res.adjacent, 0);
+    const flagged = results.filter(x => x.res.flagged.length).length;
+    // Diagnostic → exit per learner
+    const learners = uniq(list.map(r => r.learner));
+    const growth = learners.map(name => {
+      const mine = results.filter(x => x.r.learner === name);
+      const dx = mine.filter(x => x.r.task === 'DX').map(x => x.res.mean);
+      const exits = mine.filter(x => x.r.task !== 'DX');
+      return {
+        name,
+        dx: dx.length ? dx[dx.length - 1] : null,
+        exit: exits.length ? exits.reduce((s, x) => s + x.res.mean, 0) / exits.length : null,
+        met: exits.length ? exits.filter(x => x.res.met).length + '/' + exits.length : '—'
+      };
+    });
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="stat-grid">
+          <div class="stat"><div class="v">${pct(exact, n)}%</div><div class="l ltr" lang="en">exact agreement</div></div>
+          <div class="stat"><div class="v">${pct(adj, n)}%</div><div class="l ltr" lang="en">within 1 point</div></div>
+          <div class="stat"><div class="v">${flagged}</div><div class="l ltr" lang="en">need discussion</div></div>
+        </div>
+        <p class="small muted ltr" lang="en">Agreement is computed per criterion across ${results.length} double-rated role-play${results.length === 1 ? '' : 's'} (${n} criterion ratings).</p>
+        <div class="card stack">
+          <h3 class="ltr" lang="en">Diagnostic → exit, per learner (mean total of two raters, out of ${P.rubric.criteria.length * 4})</h3>
+          <div class="table-scroll"><table class="plain">
+            <thead><tr><th>Learner</th><th>DX</th><th>Exit mean</th><th>Exit met</th></tr></thead>
+            <tbody>${growth.map(g => `<tr><td>${esc(g.name)}</td><td class="num">${g.dx != null ? g.dx.toFixed(1) : '—'}</td><td class="num">${g.exit != null ? g.exit.toFixed(1) : '—'}</td><td class="num">${g.met}</td></tr>`).join('')}</tbody>
+          </table></div>
+        </div>
+        <div class="card stack">
+          <h3 class="ltr" lang="en">All ratings</h3>
+          <div class="table-scroll"><table class="plain">
+            <thead><tr><th>Learner</th><th>Task</th><th>R1</th><th>R2</th><th>Mean</th><th></th><th></th></tr></thead>
+            <tbody>${results.map(({ r, res }) => `<tr>
+              <td>${esc(r.learner)}<br><span class="muted small">${fmtDateEn(r.at)}</span></td><td>${esc(r.task)}</td>
+              <td class="num">${res.t1}</td><td class="num">${res.t2}</td><td class="num">${res.mean.toFixed(1)}</td>
+              <td>${res.met ? '<span class="pill good">met</span>' : '<span class="pill amber">not yet</span>'}${res.flagged.length ? ' <span class="pill bad">gap</span>' : ''}</td>
+              <td><button class="btn ghost small" type="button" data-del="${esc(r.id)}" aria-label="Delete">${icon('trash')}</button></td></tr>`).join('')}</tbody>
+          </table></div>
+        </div>
+        <button class="btn block" type="button" data-act="csv">${icon('download')} Export CSV</button>
+        <a class="btn ghost block" href="#/trainer/rate">Rate another</a>
+      </div>`;
+    $$('[data-del]').forEach(b => b.addEventListener('click', () => {
+      if (!confirm('Delete this rating?')) return;
+      S.trainer.ratings = S.trainer.ratings.filter(r => r.id !== b.dataset.del);
+      save(); render();
+    }));
+    $('[data-act="csv"]').addEventListener('click', () => {
+      const C = P.rubric.criteria.map(c => c.id);
+      const head = ['learner', 'task', 'date', 'rater1', ...C.map(c => 'r1_' + c), 'rater2', ...C.map(c => 'r2_' + c), 'r1_total', 'r2_total', 'mean_total', 'met'];
+      const q = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+      const rows = results.map(({ r, res }) => [r.learner, r.task, new Date(r.at).toISOString(), r.r1.name, ...C.map(c => r.r1.scores[c]), r.r2.name, ...C.map(c => r.r2.scores[c]), res.t1, res.t2, res.mean, res.met ? 1 : 0].map(q).join(','));
+      const blob = new Blob(['﻿' + [head.join(','), ...rows].join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${P.meta.id}-roleplay-ratings-${dayKey()}.csv`;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    });
+  }
+
+  // Two reviewers map the exit assessment to the outcomes independently; report agreement.
+  function viewAlign() {
+    setBar('فحص المواءمة', 'Alignment check');
+    trainerMode();
+    const tasks = P.assessments.filter(a => a.summative);
+    const al = S.trainer.align;
+    function grid(who) {
+      view.innerHTML = `
+        <div class="stack-lg">
+          <div class="note brand"><strong>Reviewer ${who}</strong> <span class="ltr" lang="en">— for each exit task, tick every outcome you think it assesses. Work alone; ${who === 'B' ? 'Reviewer A\'s answers stay hidden.' : 'Reviewer B goes next.'}</span></div>
+          <div class="card stack">
+            <label class="field">Reviewer ${who} name<input class="input" id="aName"></label>
+          </div>
+          ${tasks.map(t => {
+            const card = P.roleplayCards.find(c => c.id === t.id);
+            return `
+            <div class="card stack">
+              <strong class="ltr" lang="en">${esc(t.id)}: ${esc(t.en)}</strong>
+              <p class="small ltr" lang="en">${esc(card ? card.learner.en : t.note.en)}</p>
+              <div class="row wrap">${P.outcomes.map(o => `
+                <label class="pill" style="cursor:pointer" title="${esc(o.en)}"><input type="checkbox" data-t="${t.id}" data-o="${o.id}"> ${esc(o.id)}</label>`).join('')}</div>
+            </div>`;
+          }).join('')}
+          <details class="acc"><summary>Outcomes <span class="chev">${icon('down')}</span></summary>
+            <div class="acc-body">${P.outcomes.map(o => `<p class="small ltr" lang="en"><strong>${esc(o.id)}</strong> ${esc(o.en)}</p>`).join('')}</div></details>
+          <button class="btn block" type="button" data-act="save">Save reviewer ${who}</button>
+        </div>`;
+      $('[data-act="save"]').addEventListener('click', () => {
+        const map = {};
+        tasks.forEach(t => { map[t.id] = P.outcomes.filter(o => $(`input[data-t="${t.id}"][data-o="${o.id}"]`).checked).map(o => o.id); });
+        al[who] = { name: $('#aName').value.trim().slice(0, 60), map, at: Date.now() };
+        save();
+        if (who === 'A') grid('B'); else results();
+        window.scrollTo(0, 0);
+      });
+    }
+    function kappa(xs, ys) {
+      const n = xs.length;
+      const po = xs.filter((x, i) => x === ys[i]).length / n;
+      const pa = xs.filter(Boolean).length / n, pb = ys.filter(Boolean).length / n;
+      const pe = pa * pb + (1 - pa) * (1 - pb);
+      return { po, k: pe === 1 ? null : (po - pe) / (1 - pe) };
+    }
+    function results() {
+      const cells = [];
+      tasks.forEach(t => P.outcomes.forEach(o => cells.push({ t: t.id, o: o.id })));
+      const vec = m => cells.map(c => (m[c.t] || []).includes(c.o));
+      const A = vec(al.A.map), B = vec(al.B.map), D = vec(Object.fromEntries(tasks.map(t => [t.id, t.plos])));
+      const ab = kappa(A, B), ad = kappa(A, D), bd = kappa(B, D);
+      const dis = cells.filter((c, i) => A[i] !== B[i]);
+      const fmtK = k => (k == null ? '—' : k.toFixed(2));
+      view.innerHTML = `
+        <div class="stack-lg">
+          <div class="stat-grid">
+            <div class="stat"><div class="v">${Math.round(ab.po * 100)}%</div><div class="l ltr" lang="en">agreement A–B</div></div>
+            <div class="stat"><div class="v">${fmtK(ab.k)}</div><div class="l ltr" lang="en">Cohen's kappa</div></div>
+            <div class="stat"><div class="v">${dis.length}</div><div class="l ltr" lang="en">cells differ</div></div>
+          </div>
+          <p class="small muted ltr" lang="en">${cells.length} task-by-outcome decisions (${tasks.length} exit tasks × ${P.outcomes.length} outcomes). Reviewer A: ${esc(al.A.name || '—')}; Reviewer B: ${esc(al.B.name || '—')}.</p>
+          <div class="card stack">
+            <h3 class="ltr" lang="en">Each reviewer against the design matrix</h3>
+            <table class="plain"><tbody>
+              <tr><th>Reviewer A</th><td class="num">${Math.round(ad.po * 100)}% · κ ${fmtK(ad.k)}</td></tr>
+              <tr><th>Reviewer B</th><td class="num">${Math.round(bd.po * 100)}% · κ ${fmtK(bd.k)}</td></tr>
+            </tbody></table>
+          </div>
+          ${dis.length ? `<div class="card stack"><h3 class="ltr" lang="en">Where the reviewers differ</h3>
+            <ul class="plain-list small">${dis.map(c => `<li>${ltr(`${c.t} × ${c.o}: A ${(al.A.map[c.t] || []).includes(c.o) ? 'yes' : 'no'}, B ${(al.B.map[c.t] || []).includes(c.o) ? 'yes' : 'no'}; design ${ASSESS[c.t].plos.includes(c.o) ? 'yes' : 'no'}`)}</li>`).join('')}</ul></div>` : feedback(true, 'The reviewers agree on every cell.')}
+          <p class="small muted ltr" lang="en">Report this agreement before the pilot. If a task is changed, change only the alignment, using equated tasks and a second rater.</p>
+          <button class="btn ghost block" type="button" data-act="reset">Start a new check</button>
+        </div>`;
+      $('[data-act="reset"]').addEventListener('click', () => { if (!confirm('Clear both reviewers?')) return; S.trainer.align = { A: null, B: null }; save(); render(); });
+    }
+    if (al.A && al.B) results();
+    else if (al.A) grid('B');
+    else grid('A');
+  }
+
+  // =====================================================================
+  // Boot
+  // =====================================================================
+  function boot() {
+    $('#backBtn').innerHTML = icon('back');
+    $('#helpBtn').innerHTML = icon('help');
+    $('#settingsBtn').innerHTML = icon('settings');
+    $$('.tab-bar a').forEach(a => { a.insertAdjacentHTML('afterbegin', icon(a.dataset.icon)); });
+    $('#backBtn').addEventListener('click', goBack);
+    $('.skip').addEventListener('click', e => { e.preventDefault(); view.focus(); });
+    $('#helpBtn').addEventListener('click', openHelp);
+    applySettings();
+    window.addEventListener('hashchange', render);
+    render();
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });
+    }
+  }
+  boot();
+})();
