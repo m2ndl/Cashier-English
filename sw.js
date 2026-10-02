@@ -1,5 +1,5 @@
 /* Offline support: cache the app shell, refresh it in the background. */
-const CACHE = 'retail-english-2.0.0';
+const CACHE = 'retail-english-2.0.1';
 const ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,8 @@ const ASSETS = [
   './icons/icon.svg',
   './icons/icon-180.png',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -30,11 +31,16 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Pages: network first so updates arrive, cache when offline.
+  // Pages: network first so updates arrive, cache when offline. Only the app page itself
+  // refreshes the cached copy; other in-scope pages (a 404, a raw file) never replace it.
   if (req.mode === 'navigate') {
+    const isApp = /\/(index\.html)?$/.test(url.pathname);
     event.respondWith(
       fetch(req)
-        .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); return res; })
+        .then(res => {
+          if (isApp && res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./index.html', copy)); }
+          return res;
+        })
         .catch(() => caches.match('./index.html'))
     );
     return;

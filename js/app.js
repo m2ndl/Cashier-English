@@ -109,11 +109,11 @@
   // Content lookups
   // =====================================================================
   const UNITS = P.units;
-  const PH = {};
+  const PH = Object.create(null);
   UNITS.forEach(u => u.phrases.forEach(p => { p.unit = u.id; PH[p.id] = p; }));
-  const PLO = {};
+  const PLO = Object.create(null);
   P.outcomes.forEach(o => { PLO[o.id] = o; });
-  const ASSESS = {};
+  const ASSESS = Object.create(null);
   P.assessments.forEach(a => { ASSESS[a.id] = a; });
   const unitById = id => UNITS.find(u => u.id === id);
   const unitIndex = id => UNITS.findIndex(u => u.id === id);
@@ -181,18 +181,121 @@
       trainer: { ratings: [], pending: null, align: { A: null, B: null } }
     };
   }
-  function merge(base, extra) {
-    Object.keys(extra || {}).forEach(k => {
-      const b = base[k], e = extra[k];
-      if (e && typeof e === 'object' && !Array.isArray(e) && b && typeof b === 'object' && !Array.isArray(b)) base[k] = merge(b, e);
-      else base[k] = e;
+  // Saved and imported data is rebuilt field by field: only known keys, checked types and
+  // ranges. Anything else is dropped, so a bad file can neither break the app nor inject markup.
+  const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const num = v => (typeof v === 'number' && isFinite(v) ? v : 0);
+  const int = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null);
+  const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+  const DATE = /^\d{4}-\d{2}-\d{2}$/;
+  const isDate = v => typeof v === 'string' && DATE.test(v);
+  function sanitize(r) {
+    const d = fresh();
+    if (!isObj(r) || r.v !== 2) return d;
+    if (isObj(r.profile)) {
+      d.profile.name = str(r.profile.name, 60);
+      d.profile.store = str(r.profile.store, 80);
+      d.profile.startedAt = isDate(r.profile.startedAt) ? r.profile.startedAt : null;
+    }
+    if (isObj(r.settings)) {
+      const t = r.settings;
+      if (typeof t.ar === 'boolean') d.settings.ar = t.ar;
+      if (typeof t.mic === 'boolean') d.settings.mic = t.mic;
+      if (typeof t.rate === 'number' && t.rate >= 0.5 && t.rate <= 1.5) d.settings.rate = t.rate;
+      if (['mix', 'us', 'gb'].includes(t.accent)) d.settings.accent = t.accent;
+      if (['auto', 'light', 'dark'].includes(t.theme)) d.settings.theme = t.theme;
+    }
+    d.welcomeDone = r.welcomeDone === true;
+    ['entry', 'exit'].forEach(f => {
+      const se = isObj(r.self) ? r.self[f] : null;
+      if (isObj(se) && P.outcomes.every(o => int(se[o.id], 1, 4))) {
+        d.self[f] = { at: num(se.at) };
+        P.outcomes.forEach(o => { d.self[f][o.id] = se[o.id]; });
+      }
+      const lc = isObj(r.lc) ? r.lc[f] : null;
+      if (isObj(lc) && int(lc.total, 1, 100) && int(lc.score, 0, lc.total) !== null) {
+        d.lc[f] = {
+          score: lc.score, total: lc.total, at: num(lc.at),
+          partA: int(lc.partA, 0, 100) || 0, partATotal: int(lc.partATotal, 0, 100) || 0,
+          partB: int(lc.partB, 0, 100) || 0, partBTotal: int(lc.partBTotal, 0, 100) || 0,
+          answers: Array.isArray(lc.answers) ? lc.answers.filter(isObj).map(a => ({
+            t: str(a.t, 12), plo: str(a.plo, 12), ok: a.ok === true,
+            ans: typeof a.ans === 'number' && isFinite(a.ans) ? a.ans : (str(a.ans, 200) || null)
+          })) : []
+        };
+      }
     });
-    return base;
+    UNITS.forEach(u => {
+      const st = isObj(r.steps) ? r.steps[u.id] : null;
+      if (isObj(st)) STEPS.forEach(s => {
+        const rec = st[s.id];
+        if (!isObj(rec)) return;
+        const o = { at: num(rec.at) };
+        if (typeof rec.last === 'number' && isFinite(rec.last)) o.last = clamp(Math.round(rec.last), 0, 999);
+        if (typeof rec.best === 'number' && isFinite(rec.best)) o.best = clamp(Math.round(rec.best), 0, 999);
+        (d.steps[u.id] = d.steps[u.id] || {})[s.id] = o;
+      });
+      const ch = isObj(r.checks) ? r.checks[u.id] : null;
+      if (Array.isArray(ch)) {
+        const list = ch.filter(c => isObj(c) && int(c.pct, 0, 100) !== null).map(c => ({ pct: c.pct, at: num(c.at) }));
+        if (list.length) d.checks[u.id] = list;
+      }
+      const m = isObj(r.missions) ? r.missions[u.id] : null;
+      if (isObj(m)) d.missions[u.id] = { count: int(m.count, 0, 999), note: str(m.note, 2000), at: num(m.at) };
+      const pu = isObj(r.pulses) ? r.pulses[u.id] : null;
+      if (isObj(pu) && int(pu.useful, 1, 5) && ['easy', 'right', 'hard'].includes(pu.level)) {
+        d.pulses[u.id] = { useful: pu.useful, level: pu.level, comment: str(pu.comment, 500), at: num(pu.at) };
+      }
+      const b = isObj(r.best) ? int(r.best['speed-' + u.id], 0, 999) : null;
+      if (b !== null) d.best['speed-' + u.id] = b;
+    });
+    if (isObj(r.srs)) Object.keys(r.srs).forEach(id => {
+      const c = r.srs[id];
+      if (PH[id] && isObj(c) && int(c.box, 1, 5) && isDate(c.due)) d.srs[id] = { box: c.box, due: c.due };
+    });
+    if (isObj(r.time)) Object.keys(r.time).forEach(k => {
+      if (isDate(k) && typeof r.time[k] === 'number' && r.time[k] > 0) d.time[k] = Math.min(Math.round(r.time[k]), 86400);
+    });
+    if (isObj(r.survey) && P.feedback.survey.every(q => int(r.survey[q.id], 1, 5))) {
+      d.survey = { at: num(r.survey.at) };
+      P.feedback.survey.forEach(q => { d.survey[q.id] = r.survey[q.id]; });
+      P.feedback.open.forEach(q => { d.survey[q.id] = str(r.survey[q.id], 1000); });
+    }
+    if (isObj(r.trainer)) {
+      const T = r.trainer;
+      const R = P.rubric, lo = R.scale[0], hi = R.scale[R.scale.length - 1];
+      const tasks = P.roleplayCards.map(c => c.id);
+      const rater = x => {
+        if (!isObj(x) || !isObj(x.scores) || !R.criteria.every(c => int(x.scores[c.id], lo, hi))) return null;
+        const scores = {};
+        R.criteria.forEach(c => { scores[c.id] = x.scores[c.id]; });
+        return { name: str(x.name, 60), scores };
+      };
+      if (Array.isArray(T.ratings)) {
+        d.trainer.ratings = T.ratings.map((x, i) => {
+          if (!isObj(x) || !tasks.includes(x.task)) return null;
+          const r1 = rater(x.r1), r2 = rater(x.r2);
+          if (!r1 || !r2) return null;
+          return { id: str(x.id, 40) || 'r' + i + Date.now().toString(36), learner: str(x.learner, 80), task: x.task, r1, r2, at: num(x.at) };
+        }).filter(Boolean);
+      }
+      if (isObj(T.pending) && tasks.includes(T.pending.task) && rater(T.pending.r1)) {
+        d.trainer.pending = { learner: str(T.pending.learner, 80), task: T.pending.task, r1: rater(T.pending.r1), at: num(T.pending.at) };
+      }
+      if (isObj(T.align)) ['A', 'B'].forEach(w => {
+        const a = T.align[w];
+        if (!isObj(a) || !isObj(a.map)) return;
+        const map = {};
+        P.assessments.filter(x => x.summative).forEach(t => { map[t.id] = Array.isArray(a.map[t.id]) ? uniq(a.map[t.id].filter(id => PLO[id])) : []; });
+        d.trainer.align[w] = { name: str(a.name, 60), map, at: num(a.at) };
+      });
+    }
+    return d;
   }
   function load() {
     let data = null;
     try { data = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { data = null; }
-    return merge(fresh(), data && data.v === 2 ? data : {});
+    return sanitize(data);
   }
   let S = load();
   let saveTimer = null;
@@ -202,6 +305,14 @@
   }
   function saveSoon() { if (!saveTimer) saveTimer = setTimeout(save, 2000); }
   window.addEventListener('pagehide', save);
+  // Another tab saved: adopt its state so this tab does not overwrite it later.
+  // The current screen keeps showing; fresh data appears on the next navigation.
+  window.addEventListener('storage', e => {
+    if (e.key !== KEY && e.key !== null) return;
+    clearTimeout(saveTimer); saveTimer = null;
+    S = load();
+    applySettings();
+  });
 
   // Study time: counts 15-second ticks while the page is visible and in use.
   let lastActive = Date.now();
@@ -298,7 +409,7 @@
   }
   function priceShort(h) {
     const r = Math.floor(h / 100), c = h % 100;
-    if (!c || !r) return priceWords(h);
+    if (!c || !r || r % 100 === 0) return priceWords(h);
     return intWords(r) + ' ' + (c < 10 ? 'oh ' + ONES[c] : u100(c));
   }
   const fmtPrice = h => Math.floor(h / 100).toLocaleString('en-US') + '.' + pad(h % 100);
@@ -505,6 +616,8 @@
   const progressBar = v => `<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><span style="width:${v}%"></span></div>`;
   // Navigating to the current hash fires no hashchange, so re-render directly.
   const go = hash => { if (location.hash === hash) render(); else location.hash = hash; };
+  // For invalid links: move on without leaving the bad address in the history.
+  const redirect = hash => { if (location.hash === hash) { render(); return; } replacing = true; location.replace(hash); };
 
   // Tap-to-hear anywhere: any element with data-say.
   document.addEventListener('click', async e => {
@@ -522,6 +635,7 @@
     if (link && link.getAttribute('href') === location.hash) { e.preventDefault(); render(); }
   });
 
+  let closeHelp = null;
   function openHelp() {
     if ($('.sheet-backdrop')) return;
     const wrap = document.createElement('div');
@@ -546,7 +660,15 @@
             </section>`).join('')}
         </div>
       </div>`;
-    const close = () => { wrap.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); stopAll(); $('#helpBtn').focus(); };
+    const close = (refocus = true) => {
+      wrap.remove();
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKey);
+      closeHelp = null;
+      stopAll();
+      if (refocus) $('#helpBtn').focus();
+    };
+    closeHelp = close;
     const onKey = e => { if (e.key === 'Escape') close(); };
     wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
     document.addEventListener('keydown', onKey);
@@ -651,7 +773,7 @@
       const params = {};
       let ok = true;
       pp.forEach((p, i) => {
-        if (p[0] === ':') params[p.slice(1)] = decodeURIComponent(parts[i]);
+        if (p[0] === ':') { try { params[p.slice(1)] = decodeURIComponent(parts[i]); } catch (e) { ok = false; } }
         else if (p !== parts[i]) ok = false;
       });
       if (ok) return { fn, params };
@@ -666,8 +788,7 @@
     stopAll();
     cleanups.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
     cleanups = [];
-    $$('.sheet-backdrop').forEach(s => s.remove());
-    document.body.style.overflow = '';
+    if (closeHelp) closeHelp(false);
 
     let path = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
     let m = match(path);
@@ -690,7 +811,16 @@
     try { m.fn(m.params); }
     catch (err) {
       console.error(err);
-      view.innerHTML = `<div class="empty">${icon('alert')}<p>حدث خطأ غير متوقع.</p><a class="btn" href="#/">الرئيسية</a></div>`;
+      view.innerHTML = `
+        <div class="empty stack">${icon('alert')}<p>حدث خطأ غير متوقع.</p>
+          <a class="btn" href="#/">الرئيسية</a>
+          <button class="btn ghost" type="button" data-act="hard-reset">مسح البيانات والبدء من جديد</button>
+        </div>`;
+      $('[data-act="hard-reset"]', view).addEventListener('click', () => {
+        if (!confirm('سيُحذف كل تقدمك على هذا الجهاز نهائيًا. هل أنت متأكد؟')) return;
+        try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
+        S = fresh(); applySettings(); go('#/');
+      });
     }
     window.scrollTo(0, 0);
     view.focus({ preventScroll: true });
@@ -908,7 +1038,8 @@
           </fieldset>`).join('')}
         <button class="btn block" type="button" data-act="save-self">حفظ</button>
       </div>`;
-    $('[data-act="save-self"]', host).addEventListener('click', () => {
+    $('[data-act="save-self"]', host).addEventListener('click', e => {
+      if (e.currentTarget.disabled) return;
       const out = { at: Date.now() };
       let missing = 0;
       P.outcomes.forEach(o => {
@@ -916,6 +1047,7 @@
         if (c) out[o.id] = +c.value; else missing++;
       });
       if (missing) { toast('أجب عن جميع العبارات من فضلك'); return; }
+      e.currentTarget.disabled = true;
       S.self[form] = out;
       save();
       done();
@@ -930,12 +1062,13 @@
       const options = shuffle(it.options, rand);
       return { ...it, options, correct: options.indexOf(it.options[0]) };
     });
-    let idx = 0, plays = 0;
+    let idx = 0, plays = 0, answered = false;
     const answers = [];
     function draw() {
       stopAll();
       const it = items[idx];
       plays = 0;
+      answered = false;
       const part = it.t === 'price' ? 'الجزء أ: اكتب السعر الذي تسمعه (بالريال)' : 'الجزء ب: ماذا يريد العميل؟';
       host.innerHTML = `
         <div class="stack">
@@ -952,8 +1085,13 @@
         </div>`;
       $('[data-act="play"]', host).addEventListener('click', play);
       if (it.t === 'price') {
-        $('[data-act="submit"]', host).addEventListener('click', () => record(parsePrice($('#ans').value)));
-        $('#ans', host).addEventListener('keydown', e => { if (e.key === 'Enter') record(parsePrice(e.target.value)); });
+        const submit = () => {
+          const v = parsePrice($('#ans', host).value);
+          if (v == null) { toast('اكتب السعر بالأرقام، مثل 47.75'); return; }
+          record(v);
+        };
+        $('[data-act="submit"]', host).addEventListener('click', submit);
+        $('#ans', host).addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
       } else {
         $$('.option', host).forEach(b => b.addEventListener('click', () => record(+b.dataset.opt)));
       }
@@ -969,6 +1107,8 @@
       if (btn.isConnected) { btn.classList.remove('playing'); if (plays >= 2) btn.disabled = true; }
     }
     function record(ans) {
+      if (answered) return;
+      answered = true;
       const it = items[idx];
       const ok = it.t === 'price' ? ans === it.amount : ans === it.correct;
       answers.push({ t: it.t, plo: it.plo, ok, ans: it.t === 'price' ? ans : (it.options[ans] || null) });
@@ -1074,7 +1214,7 @@
 
   function viewUnit({ u }) {
     const unit = unitById(u);
-    if (!unit) { go('#/units'); return; }
+    if (!unit) { redirect('#/units'); return; }
     const i = unitIndex(u);
     setBar(`الوحدة ${i + 1}: ${unit.title.ar}`, `الأسبوع ${unit.week} · ${unit.title.en}`);
     const best = checkBest(u);
@@ -1115,7 +1255,7 @@
   function viewStep({ u, step }) {
     const unit = unitById(u);
     const sIdx = STEPS.findIndex(s => s.id === step);
-    if (!unit || sIdx < 0) { go('#/units'); return; }
+    if (!unit || sIdx < 0) { redirect('#/units'); return; }
     const s = STEPS[sIdx];
     setBar(s.ar, `الوحدة ${unitIndex(u) + 1}: ${unit.title.ar}`);
     view.innerHTML = `
@@ -1499,7 +1639,7 @@
       $('#heard', host).textContent = 'أستمع…';
       try {
         const alts = await Mic.listen();
-        if (!host.isConnected) return;
+        if (!btn.isConnected) return; // the turn moved on while listening
         btn.classList.remove('listening');
         if (!alts.length) { $('#heard', host).textContent = 'لم أسمع شيئًا. حاول مرة أخرى.'; return; }
         const r = compareSpeech(line.en, alts);
@@ -1512,6 +1652,7 @@
         }
       } catch (err) {
         btn.classList.remove('listening');
+        if (!btn.isConnected || err === 'aborted') return; // stopped on purpose
         const msg = err === 'not-allowed' || err === 'service-not-allowed' ? 'اسمح للمتصفح باستخدام الميكروفون، أو تابع دونه.'
           : err === 'network' ? 'التعرّف على الصوت يحتاج إلى اتصال بالإنترنت.'
           : err === 'no-speech' ? 'لم أسمع شيئًا. حاول مرة أخرى.' : 'تعذّر استخدام الميكروفون.';
@@ -1521,6 +1662,7 @@
       }
     }
     async function reveal(line, ok) {
+      Mic.stop();
       const turnBox = $('#turn', host);
       if (ok) said++;
       addBubble(line);
@@ -1800,7 +1942,7 @@
         $('#nFb').innerHTML = feedback(ok, ok ? 'صحيح!' : `الصحيح: ${fmtPrice(amount)}`, `<span class="say" lang="en" dir="ltr" style="display:block">${esc(text)}</span>`) +
           `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
         $('[data-act="check"]', body).remove();
-        $('[data-act="next"]', body).addEventListener('click', drawListen);
+        $('[data-act="next"]', body).addEventListener('click', draw);
         $('[data-act="next"]', body).focus();
       };
       $('[data-act="check"]', body).addEventListener('click', check);
@@ -1831,24 +1973,32 @@
         </div>`;
       const reveal = () => { $('#nAnswer').hidden = false; const r = $('[data-act="reveal"]', body); if (r) r.remove(); };
       $('[data-act="reveal"]', body).addEventListener('click', reveal);
-      $('[data-act="yes"]', body).addEventListener('click', () => { total++; right++; setScore(); drawSay(); });
-      $('[data-act="no"]', body).addEventListener('click', () => { total++; setScore(); drawSay(); });
+      $('[data-act="yes"]', body).addEventListener('click', () => { total++; right++; setScore(); draw(); });
+      $('[data-act="no"]', body).addEventListener('click', () => { total++; setScore(); draw(); });
       const mic = $('[data-act="mic"]', body);
       if (mic) mic.addEventListener('click', async () => {
         if (mic.classList.contains('listening')) { Mic.stop(); return; }
         mic.classList.add('listening');
-        $('#heard').textContent = 'أستمع…';
+        const heard = $('#heard', body);
+        heard.textContent = 'أستمع…';
         try {
           const alts = await Mic.listen();
+          if (!mic.isConnected) return; // a new price is showing
           mic.classList.remove('listening');
-          if (!alts.length) { $('#heard').textContent = 'لم أسمع شيئًا.'; return; }
+          if (!alts.length) { heard.textContent = 'لم أسمع شيئًا.'; return; }
           const r1 = compareSpeech(full, alts), r2 = compareSpeech(short, alts);
           const r = r1.score >= r2.score ? r1 : r2;
-          $('#heard').textContent = `سمعت: “${r.heard}”` + (r.score >= 0.8 ? ' ✓' : '');
-          if (r.score >= 0.8) { total++; right++; setScore(); reveal(); $('[data-act="yes"]', body).parentElement.remove(); body.insertAdjacentHTML('beforeend', `<button class="btn block" type="button" data-act="nx">التالي ${icon('next')}</button>`); $('[data-act="nx"]', body).addEventListener('click', drawSay); }
+          heard.textContent = `سمعت: “${r.heard}”` + (r.score >= 0.8 ? ' ✓' : '');
+          if (r.score >= 0.8) {
+            total++; right++; setScore(); reveal();
+            $('[data-act="yes"]', body).parentElement.remove();
+            body.insertAdjacentHTML('beforeend', `<button class="btn block" type="button" data-act="nx">التالي ${icon('next')}</button>`);
+            $('[data-act="nx"]', body).addEventListener('click', draw);
+          }
         } catch (err) {
           mic.classList.remove('listening');
-          $('#heard').textContent = err === 'network' ? 'التعرّف على الصوت يحتاج إلى اتصال بالإنترنت.' : 'تعذّر استخدام الميكروفون.';
+          if (!mic.isConnected || err === 'aborted') return;
+          heard.textContent = err === 'network' ? 'التعرّف على الصوت يحتاج إلى اتصال بالإنترنت.' : 'تعذّر استخدام الميكروفون.';
         }
       });
     }
@@ -1869,7 +2019,7 @@
         $$('[data-n]', body).forEach(x => { x.disabled = true; if (+x.dataset.n === target) x.classList.add('correct'); else if (x === b) x.classList.add('wrong'); });
         $('#nFb').innerHTML = feedback(ok, ok ? 'صحيح!' : `سمعت ${target}`, `<span class="say" lang="en" dir="ltr" style="display:block">${esc(text)}</span>`) +
           `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
-        $('[data-act="next"]', body).addEventListener('click', drawPairs);
+        $('[data-act="next"]', body).addEventListener('click', draw);
       }));
       say(text, 'c');
     }
@@ -1887,11 +2037,12 @@
           ${next ? `<p class="small">المراجعة القادمة: ${fmtDate(next)}</p>` : ''}</div>
         ${learned.length ? `<button class="btn ghost block" type="button" data-act="extra">تدرّب على 10 عبارات عشوائية</button>` : `<a class="btn block" href="#/unit/${UNITS[0].id}/phrases">ابدأ</a>`}`;
       const extra = $('[data-act="extra"]');
-      if (extra) extra.addEventListener('click', () => run(shuffle(learned).slice(0, 10)));
+      if (extra) extra.addEventListener('click', () => run(shuffle(learned).slice(0, 10), false));
       return;
     }
-    run(due);
-    function run(queue) {
+    run(due, true);
+    // graded: false for extra practice, which must not move cards that are not due yet.
+    function run(queue, graded) {
       queue = queue.slice();
       const requeued = new Set();
       let done = 0;
@@ -1935,8 +2086,9 @@
           say(p.k, 'k');
         });
         $$('[data-g]').forEach(b => b.addEventListener('click', () => {
+          $$('[data-g]').forEach(x => { x.disabled = true; });
           const g = +b.dataset.g;
-          srsGrade(id, g);
+          if (graded && !requeued.has(id)) srsGrade(id, g);
           queue.shift();
           if (g === 0 && !requeued.has(id)) { requeued.add(id); queue.push(id); }
           else done++;
@@ -1960,7 +2112,7 @@
   function viewDialogue({ u, which }) {
     const unit = unitById(u);
     const d = unit && (which === 'model' ? unit.model : which === 'roleplay' ? unit.roleplay : null);
-    if (!d) { go('#/dialogues'); return; }
+    if (!d) { redirect('#/dialogues'); return; }
     setBar(d.title.ar, `الوحدة ${unitIndex(u) + 1} · ${d.setting.ar}`);
     let hideK = false;
     function draw() {
@@ -2173,13 +2325,13 @@
   }
 
   function viewSelf({ form }) {
-    if (!['entry', 'exit'].includes(form)) { go('#/final'); return; }
+    if (!['entry', 'exit'].includes(form)) { redirect('#/final'); return; }
     setBar(form === 'entry' ? 'التقييم الذاتي: البداية' : 'التقييم الذاتي: النهاية', 'Self-assessment');
     selfForm(view, form, () => { toast('حُفظ التقييم الذاتي'); go(form === 'entry' ? (S.lc.entry ? '#/units' : '#/lc/entry') : '#/final'); });
   }
 
   function viewListeningCheck({ form }) {
-    if (!['entry', 'exit'].includes(form)) { go('#/final'); return; }
+    if (!['entry', 'exit'].includes(form)) { redirect('#/final'); return; }
     setBar(form === 'entry' ? 'اختبار الاستماع: البداية' : 'اختبار الاستماع: النهاية', 'Listening check');
     const prev = S.lc[form];
     const intro = () => {
@@ -2280,11 +2432,11 @@
       save();
     };
     ['#sName', '#sStore', '#sStart'].forEach(id => $(id).addEventListener('change', saveProfile));
-    $('#sAr').addEventListener('change', e => { st.ar = e.target.checked; save(); applySettings(); });
-    $('#sMic').addEventListener('change', e => { st.mic = e.target.checked; save(); });
+    $('#sAr').addEventListener('change', e => { S.settings.ar = e.target.checked; save(); applySettings(); });
+    $('#sMic').addEventListener('change', e => { S.settings.mic = e.target.checked; save(); });
     $$('[data-set]').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.set;
-      st[k] = k === 'rate' ? +b.dataset.v : b.dataset.v;
+      S.settings[k] = k === 'rate' ? +b.dataset.v : b.dataset.v;
       save(); applySettings();
       $$(`[data-set="${k}"]`).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
     }));
@@ -2296,16 +2448,17 @@
       r.onload = () => {
         try {
           const obj = JSON.parse(r.result);
-          const data = obj && obj.data && obj.data.v === 2 ? obj.data : obj && obj.v === 2 ? obj : null;
+          const data = isObj(obj) && isObj(obj.data) && obj.data.v === 2 ? obj.data : isObj(obj) && obj.v === 2 ? obj : null;
           if (!data) throw new Error('format');
           if (!confirm('سيستبدل هذا بياناتك الحالية. هل تريد المتابعة؟')) return;
-          S = merge(fresh(), data);
+          S = sanitize(data);
           save(); applySettings();
           toast('تم الاستيراد');
           render();
         } catch (err) { toast('الملف غير صالح'); }
       };
       r.readAsText(f);
+      e.target.value = '';
     });
     $('[data-act="reset"]').addEventListener('click', () => {
       if (!confirm('سيُحذف كل تقدمك على هذا الجهاز نهائيًا. هل أنت متأكد؟')) return;
@@ -2456,7 +2609,7 @@
 
   function viewGuide({ u }) {
     const unit = unitById(u);
-    if (!unit) { go('#/trainer'); return; }
+    if (!unit) { redirect('#/trainer'); return; }
     const i = unitIndex(u);
     setBar(`دليل الورشة: الوحدة ${i + 1}`, unit.title.en);
     trainerMode();
@@ -2569,7 +2722,7 @@
       })));
       const cancel = $('[data-act="cancel"]');
       if (cancel) cancel.addEventListener('click', () => { S.trainer.pending = null; save(); form(1); });
-      $('[data-act="save"]').addEventListener('click', () => {
+      $('[data-act="save"]').addEventListener('click', e => {
         const scores = {};
         const missing = R.criteria.filter(c => { const x = $(`input[name="${c.id}"]:checked`); if (x) scores[c.id] = +x.value; return !x; });
         if (missing.length) { toast('Score all four criteria'); return; }
@@ -2577,10 +2730,12 @@
         if (phase === 1) {
           const learner = $('#rLearner').value.trim().slice(0, 80);
           if (!learner) { toast('Enter the learner name or ID'); return; }
+          e.currentTarget.disabled = true;
           S.trainer.pending = { learner, task: $('#rTask').value, r1: rater, at: Date.now() };
           save();
           form(2);
         } else {
+          e.currentTarget.disabled = true;
           const rec = { id: 'r' + Date.now().toString(36), learner: pend.learner, task: pend.task, r1: pend.r1, r2: rater, at: Date.now() };
           S.trainer.ratings.push(rec);
           S.trainer.pending = null;
@@ -2692,7 +2847,7 @@
     setBar('فحص المواءمة', 'Alignment check');
     trainerMode();
     const tasks = P.assessments.filter(a => a.summative);
-    const al = S.trainer.align;
+    const al = S.trainer.align; // read again after each save: S may be replaced by another tab
     function grid(who) {
       view.innerHTML = `
         <div class="stack-lg">
@@ -2714,10 +2869,17 @@
             <div class="acc-body">${P.outcomes.map(o => `<p class="small ltr" lang="en"><strong>${esc(o.id)}</strong> ${esc(o.en)}</p>`).join('')}</div></details>
           <button class="btn block" type="button" data-act="save">Save reviewer ${who}</button>
         </div>`;
-      $('[data-act="save"]').addEventListener('click', () => {
+      // Reviewer B's form appears where A's button was: ignore clicks for a moment so a
+      // double click cannot submit it.
+      const saveBtn = $('[data-act="save"]');
+      saveBtn.disabled = true;
+      setTimeout(() => { if (saveBtn.isConnected) saveBtn.disabled = false; }, 600);
+      saveBtn.addEventListener('click', e => {
         const map = {};
         tasks.forEach(t => { map[t.id] = P.outcomes.filter(o => $(`input[data-t="${t.id}"][data-o="${o.id}"]`).checked).map(o => o.id); });
-        al[who] = { name: $('#aName').value.trim().slice(0, 60), map, at: Date.now() };
+        if (tasks.some(t => !map[t.id].length)) { toast('Tick at least one outcome for each task'); return; }
+        e.currentTarget.disabled = true;
+        S.trainer.align[who] = { name: $('#aName').value.trim().slice(0, 60), map, at: Date.now() };
         save();
         if (who === 'A') grid('B'); else results();
         window.scrollTo(0, 0);
@@ -2731,6 +2893,7 @@
       return { po, k: pe === 1 ? null : (po - pe) / (1 - pe) };
     }
     function results() {
+      const al = S.trainer.align;
       const cells = [];
       tasks.forEach(t => P.outcomes.forEach(o => cells.push({ t: t.id, o: o.id })));
       const vec = m => cells.map(c => (m[c.t] || []).includes(c.o));
