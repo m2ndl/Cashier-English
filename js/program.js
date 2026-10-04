@@ -23,7 +23,7 @@
 window.PROGRAM = {
   meta: {
     id: "retail-english",
-    version: "2.0.3",
+    version: "2.1.0",
     title: { en: "Retail English" },
     subtitle: {
       en: "English for retail sales associates",
@@ -48,40 +48,47 @@ window.PROGRAM = {
   // ---------------------------------------------------------------------------
   // Program learning outcomes. Each one names the task(s) that assess it,
   // so the alignment matrix shows both (see `assessments` below).
+  // `can` is the learner-facing wording ("I can ..."), shown in the app.
   // ---------------------------------------------------------------------------
   outcomes: [
     {
       id: "PLO1",
+      can: { ar: "أفتتح الحوار مع العميل وأختمه بلطف: أرحّب به، وأعرض المساعدة، وأشكره وأودّعه." },
       short: { en: "Open and close", ar: "الافتتاح والختام" },
       en: "Open and close service encounters politely: greet customers, offer help, thank them and say goodbye.",
       ar: "يفتتح حوار الخدمة ويختمه بلطف: يرحّب بالعميل ويعرض المساعدة ويشكره ويودّعه."
     },
     {
       id: "PLO2",
+      can: { ar: "أفهم أسئلة العميل عن أماكن المنتجات، وأرشده إليها داخل المتجر." },
       short: { en: "Finding products", ar: "إرشاد العميل" },
       en: "Understand customers' questions about where products are, and give clear directions in the store.",
       ar: "يفهم أسئلة العملاء عن أماكن المنتجات ويعطي توجيهات واضحة داخل المتجر."
     },
     {
       id: "PLO3",
+      can: { ar: "أصف المنتجات (المقاس واللون والخامة والسعر والعروض) وأقترح بدائل." },
       short: { en: "Describing products", ar: "وصف المنتجات" },
       en: "Describe products (size, colour, material, price, offers) and suggest alternatives.",
       ar: "يصف المنتجات (المقاس واللون والخامة والسعر والعروض) ويقترح بدائل."
     },
     {
       id: "PLO4",
+      can: { ar: "أفهم الأسعار والمجموع والباقي وأقولها بدقة، وأرشد العميل في الدفع." },
       short: { en: "Prices and payment", ar: "الأسعار والدفع" },
       en: "Understand and say prices, totals and change accurately, and guide customers through payment.",
       ar: "يفهم الأسعار والمجموع والباقي ويقولها بدقة، ويرشد العميل خلال عملية الدفع."
     },
     {
       id: "PLO5",
+      can: { ar: "أتعامل مع الإرجاع والاستبدال والشكاوى: أعتذر، وأشرح سياسة المتجر، وأحوّل إلى المشرف عند الحاجة." },
       short: { en: "Returns and complaints", ar: "الإرجاع والشكاوى" },
       en: "Handle returns, exchanges and complaints: apologise, explain store policy and refer to a supervisor when needed.",
       ar: "يتعامل مع الإرجاع والاستبدال والشكاوى: يعتذر ويشرح سياسة المتجر ويحوّل إلى المشرف عند الحاجة."
     },
     {
       id: "PLO6",
+      can: { ar: "أحافظ على استمرار الحوار: أطلب الإعادة، وأتأكد من الفهم، وأؤكد الأرقام." },
       short: { en: "Keeping it going", ar: "استمرار الحوار" },
       en: "Keep the conversation going: ask for repetition, check understanding and confirm numbers.",
       ar: "يحافظ على استمرار الحوار: يطلب التكرار ويتحقق من الفهم ويؤكد الأرقام."

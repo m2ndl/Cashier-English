@@ -17,7 +17,7 @@ The design follows Macalister and Nation's (2020) curriculum design model. Every
 | Environment analysis | Arabic interface, short steps for shift workers, offline use, and a workshop guide for trainers who are new to the course (**Trainer › Program design**) |
 | Needs analysis | The units follow the target situation, the service encounter, rather than grammar lists |
 | Principles | **Four strands**: every unit's steps are labelled input, output, language focus or fluency.<br>**Spaced retrieval**: a daily review deck.<br>**Interference**: Watch Out notes and practice with 13/30-type number pairs.<br>**Time on task**: study minutes are tracked.<br>**Feedback**: immediate feedback on every item. |
-| Goals | Six program learning outcomes (PLOs). Each one is written together with the task that assesses it (**Units › مخرجات البرنامج** and **Trainer › Alignment matrix**) |
+| Goals | Six program learning outcomes (PLOs). Each one is written together with the task that assesses it (**Trainer › Alignment matrix**). Learners see the same outcomes in plain first-person wording under **Units › ماذا ستتعلم؟** |
 | Content and sequencing | Six weekly units, ordered by the stages of the service encounter: welcome, finding products, products and prices, checkout, returns, complaints |
 | Format and presentation | A genre-based, text-based syllabus. Each unit runs the teaching-learning cycle: building the field, modelling and deconstruction, joint construction, then independent construction. Support is withdrawn step by step. |
 | Monitoring and assessment | **Diagnostic**: a role-play in Week 1.<br>**Listening check**: entry and exit forms.<br>**Formative**: unit checks with an 80% pass mark, plus mission logs.<br>**Summative**: three exit role-plays, scored by two raters on the same four criteria as the diagnostic. |
@@ -28,7 +28,7 @@ The design follows Macalister and Nation's (2020) curriculum design model. Every
 | Step | Teaching-learning cycle | Strand (Nation) |
 |---|---|---|
 | 1. Context and words | Building the field | Language-focused learning |
-| 2. Model conversation and stage ordering | Modelling and deconstruction | Meaning-focused input |
+| 2. Model conversation; learners put one line from each stage in order | Modelling and deconstruction | Meaning-focused input |
 | 3. Key phrases, added to the review deck | Modelling | Language-focused learning |
 | 4. Understand the customer, with mixed English accents | Modelling | Meaning-focused input |
 | 5. Build the conversation, choosing each line | Joint construction | Meaning-focused output |
@@ -50,7 +50,7 @@ The app's content comes from `js/program.js`. These values were drafted for this
 
 1. **The four role-play criteria.** They are in `rubric.criteria` and are currently task completion, understanding and interaction, service language, and clarity and fluency. Replace them with the diagnostic's own four criteria.
 2. **Program length.** It is set to `weeks: 6` and `hours: 30`, with each week split 2 + 2 + 1 hours (`meta.weeklyPattern`).
-3. **Outcome wording**, in `outcomes`.
+3. **Outcome wording**, in `outcomes` (`en`/`ar` for the design pages, `can` for the first-person wording learners see).
 4. **Pass rules:**
    - Role-plays pass at a mean total of at least 12 out of 16, with no criterion mean below 2. These values are `rubric.passTotal` and `rubric.minCriterion`.
    - Unit checks pass at 80% (`meta.passMark`).
@@ -63,7 +63,7 @@ Everything the app shows is defined in `js/program.js`, and no other file needs 
 - `phrases` holds the customer lines and the learner's replies:
   - `c` is the customer's line in two variants; `cAr` is its Arabic translation.
   - `k` is the reply; `kAr` is its Arabic translation.
-- `model` is the model conversation. Each line's `st` value names its genre stage.
+- `model` is the model conversation. Each line's `st` value names its genre stage; the first line of each stage is used in the ordering task.
 - `roleplay` is the conversation used for the build and role-play steps.
 - `workshop` holds the trainer's notes.
 - `mission` is the task done at work.

@@ -119,15 +119,15 @@
   const unitIndex = id => UNITS.findIndex(u => u.id === id);
 
   const STEPS = [
-    { id: 'context', ar: 'السياق والكلمات', en: 'Context and words', icon: 'info', strand: 'lfl', cycle: 'field' },
-    { id: 'model', ar: 'الحوار النموذجي', en: 'Model conversation', icon: 'chat', strand: 'mfi', cycle: 'model' },
-    { id: 'phrases', ar: 'العبارات المفتاحية', en: 'Key phrases', icon: 'list', strand: 'lfl', cycle: 'model' },
-    { id: 'listen', ar: 'افهم العميل', en: 'Understand the customer', icon: 'headphones', strand: 'mfi', cycle: 'model' },
-    { id: 'build', ar: 'ابنِ الحوار', en: 'Build the conversation', icon: 'layers', strand: 'mfo', cycle: 'joint' },
-    { id: 'roleplay', ar: 'تقمّص الدور', en: 'Role-play', icon: 'mic', strand: 'mfo', cycle: 'independent' },
-    { id: 'speed', ar: 'جولة السرعة', en: 'Speed round', icon: 'bolt', strand: 'flu', cycle: 'independent' },
-    { id: 'check', ar: 'اختبار الوحدة', en: 'Unit check', icon: 'clipboard', strand: 'assess', cycle: 'assess' },
-    { id: 'mission', ar: 'مهمة في العمل', en: 'Mission at work', icon: 'briefcase', strand: 'mfo', cycle: 'transfer' }
+    { id: 'context', hint: 'الموقف والكلمات الجديدة', min: 3, ar: 'السياق والكلمات', en: 'Context and words', icon: 'info', strand: 'lfl', cycle: 'field' },
+    { id: 'model', hint: 'استمع إلى حوار كامل ثم رتّبه', min: 4, ar: 'الحوار النموذجي', en: 'Model conversation', icon: 'chat', strand: 'mfi', cycle: 'model' },
+    { id: 'phrases', hint: 'عبارات العميل وردودك عليها', min: 8, ar: 'العبارات المفتاحية', en: 'Key phrases', icon: 'list', strand: 'lfl', cycle: 'model' },
+    { id: 'listen', hint: 'ماذا يقصد العميل؟ 8 أسئلة', min: 4, ar: 'افهم العميل', en: 'Understand the customer', icon: 'headphones', strand: 'mfi', cycle: 'model' },
+    { id: 'build', hint: 'اختر جملتك في كل دور', min: 3, ar: 'ابنِ الحوار', en: 'Build the conversation', icon: 'layers', strand: 'mfo', cycle: 'joint' },
+    { id: 'roleplay', hint: 'قل جملتك بنفسك', min: 4, ar: 'تقمّص الدور', en: 'Role-play', icon: 'mic', strand: 'mfo', cycle: 'independent' },
+    { id: 'speed', hint: 'دقيقة واحدة بأسرع ما يمكن', min: 1, ar: 'جولة السرعة', en: 'Speed round', icon: 'bolt', strand: 'flu', cycle: 'independent' },
+    { id: 'check', hint: '10 أسئلة لتعرف مستواك', min: 5, ar: 'اختبار الوحدة', en: 'Unit check', icon: 'clipboard', strand: 'assess', cycle: 'assess' },
+    { id: 'mission', hint: 'جرّب العبارات مع عملاء حقيقيين', min: 0, ar: 'مهمة في العمل', en: 'Mission at work', icon: 'briefcase', strand: 'mfo', cycle: 'transfer' }
   ];
   const STRAND = {
     mfi: { ar: 'مدخلات ذات معنى', en: 'Meaning-focused input' },
@@ -636,7 +636,7 @@
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
         <div class="grabber"></div>
         <div class="row" style="margin-bottom:10px">
-          <h2 id="helpTitle" class="grow" style="margin:0;font-size:1.1rem">مساعدة سريعة ${enSpan('Quick help', 'small muted')}</h2>
+          <h2 id="helpTitle" class="grow" style="margin:0;font-size:1.1rem">عبارات سريعة</h2>
           <button class="btn ghost small" type="button" data-close>إغلاق</button>
         </div>
         <p class="muted small" style="margin-bottom:12px">اضغط على العبارة لتسمعها، أو اعرضها للعميل.</p>
@@ -883,7 +883,7 @@
     view.innerHTML = `
       <div class="stack-lg">
         <section class="hero stack">
-          <p class="small" style="opacity:.85">الأسبوع ${wk} من ${P.meta.weeks} · ${esc(weekUnit.title.ar)}</p>
+          <p class="small">الأسبوع ${wk} من ${P.meta.weeks} · ${esc(weekUnit.title.ar)}</p>
           <h2>مرحبًا${S.profile.name ? '، ' + esc(S.profile.name) : ''}!</h2>
           ${progressBar(overallPct())}
           <div class="stat-grid">
@@ -999,7 +999,7 @@
       <div class="stack-lg">
         <a class="card unit-card" href="#/outcomes">
           <span class="unit-badge">${icon('flag')}</span>
-          <span class="grow"><strong>مخرجات البرنامج</strong><br><span class="muted small">ماذا ستستطيع أن تفعل، وكيف يُقيَّم كل مخرج</span></span>
+          <span class="grow"><strong>ماذا ستتعلم؟</strong><br><span class="muted small">ما ستستطيع فعله في نهاية البرنامج، وكيف يُقيَّم</span></span>
           <span class="chev">${icon('next')}</span>
         </a>
         ${S.lc.entry ? '' : `
@@ -1035,25 +1035,25 @@
   }
 
   function viewOutcomes() {
-    setBar('مخرجات البرنامج', 'Program learning outcomes');
+    setBar('ماذا ستتعلم؟', 'في نهاية البرنامج');
+    const howAssessed = o => {
+      const ways = [];
+      if (P.assessments.some(a => a.summative && a.type === 'performance' && a.plos.includes(o.id))) ways.push('لعب أدوار مع المدربين في الأسبوع ' + P.meta.weeks);
+      if (P.assessments.some(a => a.summative && a.type === 'objective' && a.plos.includes(o.id))) ways.push('اختبار الاستماع');
+      return ways.join('، و');
+    };
     view.innerHTML = `
       <div class="stack-lg">
-        <p class="muted">لكل مخرج نشاط يدرّبك عليه ومهمة تقيسه. المهارات الشفهية تُقيَّم بالأداء: لعب أدوار ختامي يقيّمه مدربان.</p>
+        <p class="muted">في نهاية البرنامج ستستطيع أن تفعل ما يلي بالإنجليزية مع عملائك:</p>
         ${P.outcomes.map(o => {
-          const units = UNITS.filter(u => u.plos.includes(o.id));
-          const tasks = P.assessments.filter(a => a.plos.includes(o.id));
+          const units = UNITS.filter(u => u.plos.includes(o.id)).map(u => unitIndex(u.id) + 1);
           return `
           <div class="card stack">
-            <div class="row"><span class="pill brand">${esc(o.id)}</span><strong>${esc(o.short.ar)}</strong></div>
-            <p>${esc(o.ar)}</p>
-            <p class="en small muted ltr" lang="en">${esc(o.en)}</p>
-            <div class="small"><strong>تتدرب عليه في:</strong> ${units.map(u => `<a class="pill" href="#/unit/${u.id}">الوحدة ${unitIndex(u.id) + 1}</a>`).join(' ')}</div>
-            <div class="small stack" style="gap:4px"><strong>يُقاس بـ:</strong>
-              ${tasks.map(a => `<span>${a.summative ? '●' : '○'} ${esc(a.ar)} <span class="muted">(${esc(a.when.ar)})</span></span>`).join('')}
-            </div>
+            <div class="row" style="align-items:flex-start">${icon('check', 'row-ico')}<strong class="grow">${esc(o.can ? o.can.ar : o.ar)}</strong></div>
+            <p class="small muted">تتدرب عليه في ${units.length > 1 ? 'الوحدات' : 'الوحدة'} ${units.join('، ')}</p>
+            <p class="small muted">يُقيَّم في: ${esc(howAssessed(o))}</p>
           </div>`;
         }).join('')}
-        <p class="muted small">● تقييم ختامي يحدد تحقق المخرج · ○ تقييم تشخيصي أو تكويني للتغذية الراجعة</p>
       </div>`;
   }
 
@@ -1061,36 +1061,44 @@
     const unit = unitById(u);
     if (!unit) { redirect('#/units'); return; }
     const i = unitIndex(u);
-    setBar(`الوحدة ${i + 1}: ${unit.title.ar}`, `الأسبوع ${unit.week} · ${unit.title.en}`);
+    setBar(`الوحدة ${i + 1}`, unit.title.ar);
     const best = checkBest(u);
+    const isDone = st => (st.id === 'check' ? unitPassed(u) : stepDone(u, st.id));
+    const doneCount = STEPS.filter(isDone).length;
+    const nextS = STEPS.find(st => !isDone(st));
     view.innerHTML = `
       <div class="stack-lg">
         <section class="hero stack">
-          <p class="small" style="opacity:.85">الوحدة ${i + 1} · الأسبوع ${unit.week}</p>
+          <p class="small">الوحدة ${i + 1} · الأسبوع ${unit.week}</p>
           <h2>${esc(unit.title.ar)}</h2>
-          <p class="en" lang="en" dir="ltr" style="text-align:left">${esc(unit.title.en)}</p>
-          <div class="meta">${unit.plos.map(id => `<span class="pill">${esc(id)} · ${esc(PLO[id].short.ar)}</span>`).join('')}</div>
+          ${progressBar(pct(doneCount, STEPS.length))}
+          ${nextS
+            ? `<a class="btn hero-btn" href="#/unit/${u}/${nextS.id}">${doneCount ? 'تابع' : 'ابدأ'}: ${esc(nextS.ar)} ${icon('next')}</a>`
+            : `<p class="small">${icon('check', 'inline-ico')} أكملت كل خطوات الوحدة</p>`}
         </section>
-        <div class="card stack">
-          <h3>في نهاية الوحدة أستطيع أن:</h3>
-          <ul class="outcomes">${unit.objectives.map(o => `<li>${icon('check')}<span>${esc(o.ar)}<span class="en ltr" lang="en">${esc(o.en)}</span></span></li>`).join('')}</ul>
-        </div>
-        <div class="note"><strong>انتبه:</strong> ${rich(unit.watchOut.ar)}</div>
         <div class="stack">
-          ${STEPS.map((s, n) => {
-            const done = s.id === 'check' ? unitPassed(u) : stepDone(u, s.id);
-            const extra = s.id === 'check' && best != null ? ` · أفضل نتيجة ${best}%` : '';
+          ${STEPS.map((st, n) => {
+            const done = isDone(st);
+            const extra = st.id === 'check' && best != null ? ` · أفضل نتيجة ${best}%` : '';
+            const time = st.min ? ` · ${st.min} د` : ' · في العمل';
             return `
-            <a class="step ${done ? 'done' : ''}" href="#/unit/${u}/${s.id}">
-              <span class="ico">${done ? icon('check') : icon(s.icon)}</span>
+            <a class="step ${done ? 'done' : ''} ${nextS && st.id === nextS.id ? 'current' : ''}" href="#/unit/${u}/${st.id}">
+              <span class="ico">${done ? icon('check') : icon(st.icon)}</span>
               <span class="grow">
-                <span class="title">${n + 1}. ${esc(s.ar)}</span><br>
-                <span class="strand">${esc(CYCLE[s.cycle].ar)} · ${esc(STRAND[s.strand].ar)}${extra}</span>
+                <span class="title">${n + 1}. ${esc(st.ar)}</span><br>
+                <span class="strand">${esc(st.hint)}${time}${extra}</span>
               </span>
               <span class="chev muted">${icon('next')}</span>
             </a>`;
           }).join('')}
         </div>
+        <details class="acc">
+          <summary>أهداف الوحدة <span class="chev">${icon('down')}</span></summary>
+          <div class="acc-body">
+            <ul class="outcomes">${unit.objectives.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
+          </div>
+        </details>
+        <div class="note"><strong>انتبه:</strong> ${rich(unit.watchOut.ar)}</div>
       </div>`;
   }
 
@@ -1105,10 +1113,10 @@
     setBar(s.ar, `الوحدة ${unitIndex(u) + 1}: ${unit.title.ar}`);
     view.innerHTML = `
       <div class="stack-lg">
-        <div class="row small muted">
-          <span class="pill">${sIdx + 1}/${STEPS.length}</span>
-          <span>${esc(CYCLE[s.cycle].ar)}</span><span>·</span><span>${esc(STRAND[s.strand].ar)}</span>
+        <div class="step-progress" aria-label="الخطوة ${sIdx + 1} من ${STEPS.length}">
+          ${STEPS.map((x, n) => `<span class="${n < sIdx ? 'past' : n === sIdx ? 'now' : ''}"></span>`).join('')}
         </div>
+        <p class="small muted" style="margin-top:-8px">الخطوة ${sIdx + 1} من ${STEPS.length} · ${esc(s.hint)}</p>
         <div id="stepBody" class="stack-lg"></div>
       </div>`;
     const host = $('#stepBody');
@@ -1124,11 +1132,7 @@
   function stepContext({ unit, u, host }) {
     host.innerHTML = `
       <div class="card"><p>${rich(unit.context.ar)}</p></div>
-      <div class="card stack">
-        <h3>في نهاية الوحدة أستطيع أن:</h3>
-        <ul class="outcomes">${unit.objectives.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
-      </div>
-      <h2 class="section">كلمات مهمة ${enSpan('Key words')}</h2>
+      <h2 class="section">كلمات مهمة</h2>
       <div class="stack">
         ${unit.words.map(w => `
           <button class="phrase-btn" type="button" data-say="${esc(w.en)}" data-role="k">
@@ -1146,7 +1150,7 @@
       let chip = '';
       if (stages && l.st && l.st !== lastSt) {
         const st = stages.find(x => x.id === l.st);
-        if (st) chip = `<div class="stage-chip">${esc(st.ar)} · ${enSpan(st.en)}</div>`;
+        if (st) chip = `<div class="stage-chip">${esc(st.ar)}</div>`;
         lastSt = l.st;
       }
       const hide = opts.hideK && l.s === 'k';
@@ -1176,24 +1180,28 @@
 
   function stepModel({ unit, u, host, nextBtn }) {
     const m = unit.model;
-    const order = uniq(m.lines.map(l => l.st).filter(Boolean));
-    const stageLabel = id => unit.stages.find(s => s.id === id) || { ar: id, en: id };
-    let shuffled = shuffle(order);
-    for (let k = 0; k < 5 && shuffled.join() === order.join(); k++) shuffled = shuffle(order);
+    // One line from each stage of the conversation, in the order they were said.
+    const picks = uniq(m.lines.map(l => l.st).filter(Boolean)).map(st => m.lines.find(l => l.st === st));
+    let shuffled = shuffle(picks);
+    for (let k = 0; k < 5 && shuffled.every((l, n) => l === picks[n]); k++) shuffled = shuffle(picks);
     host.innerHTML = `
       <div class="card stack">
-        <h3>${esc(m.title.ar)} ${enSpan(m.title.en, 'small muted')}</h3>
+        <h3>${esc(m.title.ar)}</h3>
         <p class="muted small">${esc(m.setting.ar)}</p>
-        <p class="small">استمع أولًا، ثم لاحظ مراحل الحوار. كل حوار خدمة يمر بمراحل ثابتة.</p>
+        <p class="small">استمع إلى الحوار، ثم رتّب جمله.</p>
         <button class="btn" type="button" data-act="play-all">${icon('play')} استمع للحوار كاملًا</button>
       </div>
       ${dialogueHtml(m.lines, unit.stages)}
       <div class="card stack" id="orderTask">
-        <h3>رتّب مراحل الحوار ${enSpan('Put the stages in order', 'small muted')}</h3>
-        <p class="muted small">اضغط على المراحل بالترتيب الذي تحدث به في الحوار.</p>
-        <div class="row wrap" id="orderAnswer" style="min-height:40px"></div>
-        <div class="row wrap" id="orderChoices">
-          ${shuffled.map(id => `<button class="btn ghost small" type="button" data-stage="${esc(id)}">${esc(stageLabel(id).ar)}</button>`).join('')}
+        <h3>رتّب الحوار</h3>
+        <p class="muted small">اضغط على الجمل بالترتيب الذي قيلت به.</p>
+        <ol class="order-list" id="orderAnswer"></ol>
+        <div class="options" id="orderChoices">
+          ${shuffled.map(l => `
+            <button class="option" type="button" data-pick="${picks.indexOf(l)}">
+              <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
+              <span class="say" lang="en" dir="ltr">${esc(l.en)}</span>
+            </button>`).join('')}
         </div>
         <div id="orderFb"></div>
       </div>
@@ -1201,24 +1209,24 @@
     wirePlayAll(host, m.lines);
     let pos = 0, mistakes = 0;
     $('#orderChoices', host).addEventListener('click', e => {
-      const b = e.target.closest('[data-stage]');
+      const b = e.target.closest('[data-pick]');
       if (!b || b.disabled) return;
-      if (b.dataset.stage === order[pos]) {
-        b.disabled = true;
-        b.classList.add('chosen');
-        $('#orderAnswer', host).insertAdjacentHTML('beforeend', `<span class="pill good">${pos + 1}. ${esc(stageLabel(order[pos]).ar)}</span>`);
+      if (+b.dataset.pick === pos) {
+        const l = picks[pos];
+        b.remove();
+        $('#orderAnswer', host).insertAdjacentHTML('beforeend', `<li><span class="say" lang="en" dir="ltr">${esc(l.en)}</span><span class="gloss">${esc(l.ar)}</span></li>`);
+        $('#orderFb', host).innerHTML = '';
         pos++;
-        if (pos === order.length) {
-          const score = pct(order.length, order.length + mistakes);
-          markStep(u, 'model', score);
-          $('#orderFb', host).innerHTML = feedback(true, 'أحسنت! هذه مراحل الحوار.', 'ستستخدم المراحل نفسها في لعب الأدوار.');
+        if (pos === picks.length) {
+          markStep(u, 'model', pct(picks.length, picks.length + mistakes));
+          $('#orderFb', host).innerHTML = feedback(true, 'أحسنت! رتّبت الحوار.', 'ستقول جملك بنفسك في خطوة لعب الأدوار.');
           $('#modelNext', host).innerHTML = nextBtn();
         }
       } else {
         mistakes++;
         b.classList.add('shake');
         setTimeout(() => b.classList.remove('shake'), 400);
-        $('#orderFb', host).innerHTML = feedback(false, 'ليست هذه المرحلة التالية. استمع مرة أخرى إن احتجت.');
+        $('#orderFb', host).innerHTML = feedback(false, 'ليست هذه الجملة التالية. استمع مرة أخرى إن احتجت.');
       }
     });
   }
@@ -1245,18 +1253,38 @@
   }
 
   function stepPhrases({ unit, u, host, nextBtn }) {
-    host.innerHTML = `
-      <div class="note brand"><strong>طريقة التدريب:</strong> استمع لكل عبارة، ثم كررها بصوت عالٍ. استخدم «ببطء» إذا احتجت.</div>
-      ${unit.phrases.map(phraseCard).join('')}
-      <button class="btn block" type="button" data-act="done">${icon('cards')} أضفها إلى مراجعتي اليومية</button>
-      <div id="phNext"></div>`;
-    $('[data-act="done"]', host).addEventListener('click', e => {
-      srsAdd(unit.phrases.map(p => p.id));
+    const list = unit.phrases;
+    let i = 0;
+    function draw() {
+      stopAll();
+      const p = list[i];
+      host.innerHTML = `
+        <div class="activity-head">${progressBar(pct(i, list.length))}<span class="counter num">${i + 1} / ${list.length}</span></div>
+        ${i === 0 ? '<div class="note brand"><strong>طريقة التدريب:</strong> استمع إلى كل عبارة ثم كررها بصوت عالٍ. استخدم «ببطء» إذا احتجت.</div>' : ''}
+        ${phraseCard(p)}
+        <div class="grid-2">
+          <button class="btn ghost" type="button" data-act="prev" ${i === 0 ? 'disabled' : ''}>${icon('back')} السابق</button>
+          <button class="btn" type="button" data-act="next">${i + 1 < list.length ? 'التالي' : 'إنهاء'} ${icon('next')}</button>
+        </div>`;
+      $('[data-act="prev"]', host).addEventListener('click', () => { if (i > 0) { i--; draw(); } });
+      $('[data-act="next"]', host).addEventListener('click', () => { i++; if (i < list.length) draw(); else finish(); });
+      say(p.c[0], 'c');
+    }
+    function finish() {
+      stopAll();
+      srsAdd(list.map(p => p.id));
       markStep(u, 'phrases');
-      e.currentTarget.disabled = true;
-      toast('أُضيفت العبارات إلى المراجعة');
-      $('#phNext', host).innerHTML = nextBtn();
-    });
+      host.innerHTML = `
+        <div class="card stack center">
+          <div class="empty" style="padding:4px;color:var(--good)">${icon('check')}</div>
+          <h3>أحسنت! تدربت على ${list.length} عبارة.</h3>
+          <p class="muted small">أُضيفت إلى مراجعتك اليومية لتراها مرة أخرى في الوقت المناسب.</p>
+        </div>
+        <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} من البداية</button>
+        ${nextBtn()}`;
+      $('[data-act="again"]', host).addEventListener('click', () => { i = 0; draw(); });
+    }
+    draw();
   }
 
   // Generic quiz runner used by "Understand the customer" and the unit check.
@@ -1654,7 +1682,7 @@
                 <p class="gloss">${esc(r.it.t === 'respond' ? r.it.phrase.kAr : r.it.phrase.cAr)}</p></div>`).join('')}</div>
         </details>` : ''}
         <div class="card stack">
-          <h3>رأيك في الوحدة ${enSpan('Unit pulse', 'small muted')}</h3>
+          <h3>رأيك في الوحدة</h3>
           <p class="small">ما مدى فائدة هذه الوحدة لعملك؟</p>
           <div class="scale" id="pUseful">${[1, 2, 3, 4, 5].map(v => `<label><input type="radio" name="useful" value="${v}" ${pulse.useful === v ? 'checked' : ''}><span class="num">${v}</span></label>`).join('')}</div>
           <p class="muted small" style="display:flex;justify-content:space-between"><span>قليلة</span><span>كبيرة جدًا</span></p>
@@ -1680,7 +1708,7 @@
       <div class="card stack">
         <h3>اختبار الوحدة</h3>
         <p>10 أسئلة: فهم العميل واختيار الرد المناسب${priceCount ? ' وكتابة الأسعار' : ''}. تحتاج ${P.meta.passMark}% لاجتياز الوحدة، ويمكنك الإعادة.</p>
-        <p class="muted small">هذا اختبار تكويني يساعدك على معرفة مستواك. المهارات الشفهية تُقيَّم في لعب الأدوار مع المدربين.</p>
+        <p class="muted small">هذا اختبار للتدريب يساعدك على معرفة مستواك. أما التحدث فيقيّمه المدربون في لعب الأدوار.</p>
         ${checkBest(u) != null ? `<p class="pill">أفضل نتيجة سابقة: ${checkBest(u)}%</p>` : ''}
         <button class="btn block" type="button" data-act="start">ابدأ</button>
       </div>`;
@@ -1993,11 +2021,11 @@
         ${P.watchOut.map(w => `
           <div class="card stack">
             <div class="row wrap">
-              <button class="pill amber" type="button" data-say="${esc(w.a)}" data-role="k" style="border:0;font-size:.95rem">${icon('volume')}<span lang="en" dir="ltr">${esc(w.a)}</span></button>
-              <span class="small">${esc(w.aAr)}</span>
-              ${w.b ? `<span class="muted small">≠</span>
-              <button class="pill" type="button" data-say="${esc(w.b)}" data-role="k" style="border:0;font-size:.95rem">${icon('volume')}<span lang="en" dir="ltr">${esc(w.b)}</span></button>
-              <span class="small">${esc(w.bAr)}</span>` : ''}
+              <div class="word-pair">
+                <button class="word-btn amber" type="button" data-say="${esc(w.a)}" data-role="k">${icon('volume')}<span class="w" lang="en" dir="ltr">${esc(w.a)}</span><span class="m">${esc(w.aAr)}</span></button>
+                ${w.b ? `<span class="neq" aria-hidden="true">≠</span>
+                <button class="word-btn" type="button" data-say="${esc(w.b)}" data-role="k">${icon('volume')}<span class="w" lang="en" dir="ltr">${esc(w.b)}</span><span class="m">${esc(w.bAr)}</span></button>` : ''}
+              </div>
             </div>
             <p class="small">${rich(w.note)}</p>
           </div>`).join('')}
@@ -2215,14 +2243,14 @@
         </div>
         <div class="card stack">
           <h3>اللغة والصوت</h3>
-          <div class="switch-row"><span>إظهار الترجمة العربية</span><label class="switch"><input type="checkbox" id="sAr" ${st.ar ? 'checked' : ''}><span></span></label></div>
+          <label class="switch-row"><span>إظهار الترجمة العربية</span><span class="switch"><input type="checkbox" id="sAr" ${st.ar ? 'checked' : ''}><span></span></span></label>
           <p class="small">سرعة الكلام</p>
           ${seg('rate', [[0.8, 'أبطأ'], [1, 'عادية'], [1.15, 'أسرع']], st.rate)}
           <p class="small">لهجات العملاء</p>
           ${seg('accent', [['mix', 'متنوعة'], ['us', 'أمريكية'], ['gb', 'بريطانية']], st.accent)}
           <p class="muted small">«متنوعة» تستخدم ما يتوفر في جهازك من لهجات (هندية، بريطانية، أسترالية…) لأن عملاءك من بلدان كثيرة. الأصوات المتاحة: ${TTS.ok ? TTS.voiceCount() : 0}.</p>
           <button class="btn ghost small" type="button" data-say="Hello! Welcome. How can I help you?" data-role="c">${icon('volume')} جرّب الصوت</button>
-          <div class="switch-row"><span>التدريب بالميكروفون ${Mic.ok ? '' : '<span class="muted small">(غير مدعوم في هذا المتصفح)</span>'}</span><label class="switch"><input type="checkbox" id="sMic" ${st.mic && Mic.ok ? 'checked' : ''} ${Mic.ok ? '' : 'disabled'}><span></span></label></div>
+          <label class="switch-row"><span>التدريب بالميكروفون ${Mic.ok ? '' : '<span class="muted small">(غير مدعوم في هذا المتصفح)</span>'}</span><span class="switch"><input type="checkbox" id="sMic" ${st.mic && Mic.ok ? 'checked' : ''} ${Mic.ok ? '' : 'disabled'}><span></span></span></label>
         </div>
         <div class="card stack">
           <h3>المظهر</h3>
@@ -2446,7 +2474,7 @@
       <div class="stack-lg">
         <div class="row wrap">${UNITS.map((x, n) => `<a class="pill ${x.id === u ? 'brand' : ''}" href="#/trainer/guide/${x.id}">U${n + 1}</a>`).join('')}</div>
         <section class="hero stack">
-          <p class="small" style="opacity:.85">Week ${unit.week} · 120 minutes</p>
+          <p class="small">Week ${unit.week} · 120 minutes</p>
           <h2 class="ltr" lang="en">${esc(unit.title.en)}</h2>
           <p dir="rtl" lang="ar">${esc(unit.title.ar)}</p>
           <div class="meta">${unit.plos.map(id => `<span class="pill">${esc(id)}</span>`).join('')}</div>
@@ -2753,9 +2781,8 @@
   // =====================================================================
   function boot() {
     $('#backBtn').innerHTML = icon('back');
-    $('#helpBtn').innerHTML = icon('help');
     $('#settingsBtn').innerHTML = icon('settings');
-    $$('.tab-bar a').forEach(a => { a.insertAdjacentHTML('afterbegin', icon(a.dataset.icon)); });
+    $$('.tab-bar [data-icon]').forEach(a => { a.insertAdjacentHTML('afterbegin', icon(a.dataset.icon)); });
     $('#backBtn').addEventListener('click', goBack);
     $('.skip').addEventListener('click', e => { e.preventDefault(); view.focus(); });
     $('#helpBtn').addEventListener('click', openHelp);
