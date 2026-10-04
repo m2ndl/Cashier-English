@@ -23,7 +23,7 @@
 window.PROGRAM = {
   meta: {
     id: "retail-english",
-    version: "2.1.0",
+    version: "2.2.0",
     title: { en: "Retail English" },
     subtitle: {
       en: "English for retail sales associates",
@@ -397,7 +397,12 @@ window.PROGRAM = {
         ]
       },
       watchOut: {
-        ar: "ردًا على `Thank you` قل `You're welcome` (العفو). أما `Welcome` وحدها فتعني «أهلًا بك» عند الاستقبال. واستخدم `Excuse me` لجذب الانتباه، و`Sorry` للاعتذار أو لطلب الإعادة.",
+        items: [
+          { en: "You're welcome.", ar: "العفو: ردّك عندما يشكرك العميل" },
+          { en: "Welcome!", ar: "أهلًا بك: عند استقبال العميل فقط" },
+          { en: "Excuse me.", ar: "لجذب الانتباه بأدب" },
+          { en: "Sorry?", ar: "للاعتذار، أو لطلب الإعادة" }
+        ],
         en: "Answer “Thank you” with “You're welcome”. “Welcome” alone is for greeting."
       },
       mission: {
@@ -488,7 +493,12 @@ window.PROGRAM = {
         ]
       },
       watchOut: {
-        ar: "كلمة `aisle` تُنطق «آيل»، وحرف `s` فيها صامت. وفي السعودية وبريطانيا: `ground floor` هو الدور الأرضي، و`first floor` هو الدور الأول فوقه.",
+        note: "في السعودية وبريطانيا الدور الأول فوق الدور الأرضي.",
+        items: [
+          { en: "aisle", ar: "ممر: تُنطق «آيل»، والسين لا تُنطق" },
+          { en: "ground floor", ar: "الدور الأرضي" },
+          { en: "first floor", ar: "الدور الأول، فوق الأرضي" }
+        ],
         en: "“Aisle” sounds like “I'll”. Ground floor is the street level; first floor is the one above."
       },
       mission: {
@@ -578,7 +588,11 @@ window.PROGRAM = {
         ]
       },
       watchOut: {
-        ar: "`On sale` تعني «عليه تخفيض»، أما `for sale` فتعني «معروض للبيع». و`Buy one, get one free` تعني أن القطعة الثانية مجانية، وليس خصمًا على الأولى.",
+        items: [
+          { en: "on sale", ar: "عليه تخفيض" },
+          { en: "for sale", ar: "معروض للبيع" },
+          { en: "Buy one, get one free.", ar: "اشترِ قطعة وخذ الثانية مجانًا، وليس خصمًا على الأولى" }
+        ],
         en: "“On sale” means discounted; “for sale” means available to buy."
       },
       mission: {
@@ -671,7 +685,13 @@ window.PROGRAM = {
         ]
       },
       watchOut: {
-        ar: "`Change` تعني هنا «الباقي». والأرقام المنتهية بـ `teen` يكون الضغط في آخرها (`thir-TEEN` = 13)، أما العشرات ففي أولها (`THIR-ty` = 30). إذا شككت، اسأل: `Thirteen or thirty?`",
+        note: "الأرقام 13 إلى 19 يكون الضغط في آخرها، والعشرات 30 إلى 90 في أولها.",
+        items: [
+          { en: "Here's your change.", ar: "تفضل الباقي" },
+          { en: "thir-TEEN", say: "thirteen", ar: "13: الضغط في آخر الكلمة" },
+          { en: "THIR-ty", say: "thirty", ar: "30: الضغط في أول الكلمة" },
+          { en: "Thirteen or thirty?", ar: "اسأل هكذا إذا شككت" }
+        ],
         en: "Teen numbers stress the end (thir-TEEN); tens stress the start (THIR-ty)."
       },
       mission: {
@@ -759,7 +779,11 @@ window.PROGRAM = {
         ]
       },
       watchOut: {
-        ar: "`Refund` = استرداد المبلغ. `Exchange` = استبدال المنتج بآخر. أما `Cash back` فتعني غالبًا سحب مبلغ نقدي عند الدفع بالبطاقة، وليس استرجاع المال.",
+        items: [
+          { en: "refund", ar: "استرداد المبلغ" },
+          { en: "exchange", ar: "استبدال المنتج بآخر" },
+          { en: "cash back", ar: "سحب نقدي عند الدفع بالبطاقة، وليس استرجاع المال" }
+        ],
         en: "Refund = money back. Exchange = a different item. “Cash back” is not a refund."
       },
       mission: {
@@ -849,7 +873,12 @@ window.PROGRAM = {
         ]
       },
       watchOut: {
-        ar: "`I'm sorry` لا تعني أنك أخطأت شخصيًا؛ إنها عبارة تعاطف مهذبة. وطلب المدير أمر طبيعي فلا تأخذه بشكل شخصي. وانتبه: `expired` تعني منتهي الصلاحية، أما `expensive` فتعني غالٍ.",
+        note: "طلب العميل للمدير أمر طبيعي، فلا تأخذه بشكل شخصي.",
+        items: [
+          { en: "I'm sorry.", ar: "تعاطف مهذب، ولا تعني أنك أخطأت" },
+          { en: "expired", ar: "منتهي الصلاحية" },
+          { en: "expensive", ar: "غالٍ" }
+        ],
         en: "“I'm sorry” shows understanding; it does not mean you made the mistake."
       },
       mission: {
@@ -947,19 +976,19 @@ window.PROGRAM = {
 
   // Words that trip up Arabic speakers in retail (interference).
   watchOut: [
-    { a: "receipt", aAr: "إيصال", b: "recipe", bAr: "وصفة طبخ", note: "`receipt` تُنطق «ريسيت»، وحرف `p` فيها صامت." },
-    { a: "on sale", aAr: "عليه تخفيض", b: "for sale", bAr: "معروض للبيع", note: "`This shirt is on sale` = عليه تخفيض." },
-    { a: "change", aAr: "الباقي", b: "exchange", bAr: "استبدال", note: "`Your change is 5 riyals` = الباقي 5 ريالات. `I want to exchange this` = أريد استبداله." },
-    { a: "refund", aAr: "استرداد المبلغ", b: "exchange", bAr: "استبدال المنتج", note: "اسأل: `Would you like a refund or an exchange?`" },
-    { a: "You're welcome.", aAr: "العفو", b: "Welcome!", bAr: "أهلًا بك", note: "بعد `Thank you` قل `You're welcome`، وليس `Welcome` فقط." },
-    { a: "thirteen", aAr: "13", b: "thirty", bAr: "30", note: "الضغط: `thir-TEEN` في آخر الكلمة، و`THIR-ty` في أولها. وكذلك 14/40 و15/50 حتى 19/90." },
-    { a: "card", aAr: "بطاقة", b: "cart", bAr: "عربة تسوق", note: "`card` تنتهي بصوت `d`، و`cart` تنتهي بصوت `t`." },
-    { a: "bill", aAr: "فاتورة", b: "bill / note", bAr: "ورقة نقدية", note: "`Can I have the bill?` = الفاتورة. `A 500 note (or bill)` = ورقة 500." },
-    { a: "aisle", aAr: "ممر", b: "", bAr: "", note: "تُنطق «آيل» مثل `I'll`، وحرف `s` صامت." },
-    { a: "tap", aAr: "قرّب البطاقة", b: "insert", bAr: "أدخل البطاقة", note: "`Tap` = قرّب البطاقة من الجهاز. `Insert` = أدخل الشريحة في الفتحة." },
+    { a: "receipt", aAr: "إيصال", b: "recipe", bAr: "وصفة طبخ", note: "تُنطق «ريسيت»، وحرف `p` فيها لا يُنطق." },
+    { a: "on sale", aAr: "عليه تخفيض", b: "for sale", bAr: "معروض للبيع", ex: [{ en: "This shirt is on sale.", ar: "هذا القميص عليه تخفيض." }] },
+    { a: "change", aAr: "الباقي", b: "exchange", bAr: "استبدال", ex: [{ en: "Your change is 5 riyals.", ar: "الباقي 5 ريالات." }, { en: "I want to exchange this.", ar: "أريد استبدال هذا." }] },
+    { a: "refund", aAr: "استرداد المبلغ", b: "exchange", bAr: "استبدال المنتج", note: "اسأل العميل:", ex: [{ en: "Would you like a refund or an exchange?", ar: "تريد استرداد المبلغ أم الاستبدال؟" }] },
+    { a: "You're welcome.", aAr: "العفو", b: "Welcome!", bAr: "أهلًا بك", note: "ردًا على الشكر قل «العفو»، وليس «أهلًا بك».", ex: [{ en: "Thank you!", ar: "العميل يشكرك." }, { en: "You're welcome.", ar: "وأنت تردّ: العفو." }] },
+    { a: "thirteen", aAr: "13", b: "thirty", bAr: "30", note: "في 13 يكون الضغط في آخر الكلمة، وفي 30 في أولها. وكذلك 14/40 و15/50 حتى 19/90.", ex: [{ en: "thir-TEEN", say: "thirteen", ar: "13" }, { en: "THIR-ty", say: "thirty", ar: "30" }] },
+    { a: "card", aAr: "بطاقة", b: "cart", bAr: "عربة تسوق", note: "الأولى تنتهي بصوت «د»، والثانية بصوت «ت»." },
+    { a: "bill", aAr: "فاتورة", b: "note", bAr: "ورقة نقدية", note: "وقد تسمع `bill` بمعنى الورقة النقدية أيضًا.", ex: [{ en: "Can I have the bill, please?", ar: "الفاتورة من فضلك." }, { en: "a 500-riyal note", ar: "ورقة نقدية من فئة 500 ريال" }] },
+    { a: "aisle", aAr: "ممر", b: "", bAr: "", note: "تُنطق «آيل»، والسين لا تُنطق.", ex: [{ en: "It's in aisle 3.", ar: "إنه في الممر 3." }] },
+    { a: "tap", aAr: "قرّب البطاقة", b: "insert", bAr: "أدخل البطاقة", ex: [{ en: "Please tap your card here.", ar: "قرّب بطاقتك من الجهاز." }, { en: "Please insert your card.", ar: "أدخل الشريحة في الفتحة." }] },
     { a: "points", aAr: "نقاط الولاء", b: "discount", bAr: "خصم", note: "النقاط تُجمع مع الوقت، والخصم تخفيض فوري على السعر." },
-    { a: "cash back", aAr: "سحب نقدي عند الدفع", b: "refund", bAr: "استرداد", note: "`Cash back` يعني أن يأخذ العميل نقودًا إضافية عند الدفع بالبطاقة، وليس استرجاع المال." },
-    { a: "expired", aAr: "منتهي الصلاحية", b: "expensive", bAr: "غالٍ", note: "`This milk is expired` = الحليب منتهي الصلاحية." },
+    { a: "cash back", aAr: "سحب نقدي عند الدفع", b: "refund", bAr: "استرداد", note: "أن يأخذ العميل نقودًا إضافية عند الدفع بالبطاقة، وليس استرجاع المال." },
+    { a: "expired", aAr: "منتهي الصلاحية", b: "expensive", bAr: "غالٍ", ex: [{ en: "This milk is expired.", ar: "هذا الحليب منتهي الصلاحية." }] },
     { a: "ground floor", aAr: "الدور الأرضي", b: "first floor", bAr: "الدور الأول", note: "في السعودية وبريطانيا الدور الأول فوق الأرضي." }
   ],
 

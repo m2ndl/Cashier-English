@@ -427,12 +427,23 @@
     let voices = [];
     let keepAlive = null;
     let current = null; // keeps the utterance alive until it ends
+    let loaded = false;  // the device has reported its voices (or had time to)
+    let reported = false; // the device listed at least one voice, in any language
+    let heard = false;   // at least one utterance has played on this device
     const loc = v => String(v.lang || '').replace('_', '-').toLowerCase();
-    function refresh() { if (ok) voices = speechSynthesis.getVoices().filter(v => /^en(-|$)/.test(loc(v))); }
+    const changed = () => document.dispatchEvent(new Event('voices'));
+    function refresh() {
+      if (!ok) return;
+      const all = speechSynthesis.getVoices() || [];
+      voices = all.filter(v => /^en(-|$)/.test(loc(v)));
+      if (all.length) loaded = reported = true;
+      changed();
+    }
     if (ok) {
       refresh();
       if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', refresh);
       else speechSynthesis.onvoiceschanged = refresh;
+      setTimeout(() => { if (!loaded) { loaded = true; changed(); } }, 2000);
     }
     function byLocale(prefix) {
       const list = voices.filter(v => loc(v).startsWith(prefix));
@@ -462,15 +473,17 @@
           u.rate = clamp((S.settings.rate || 1) * (opts.slow ? 0.7 : 1), 0.5, 1.5);
           let done = false;
           const fin = r => { if (done) return; done = true; clearInterval(keepAlive); resolve(r); };
-          u.onend = () => fin(true);
-          u.onerror = () => fin(false);
+          u.onstart = () => { heard = true; };
+          u.onend = () => { heard = true; fin(true); };
+          // Cancelled by the next tap: not a failure (null).
+          u.onerror = e => fin(e && /interrupted|canceled/.test(e.error) ? null : false);
           current = u;
           speechSynthesis.resume();
           speechSynthesis.speak(u);
           clearInterval(keepAlive);
           let started = false;
           keepAlive = setInterval(() => {
-            if (speechSynthesis.speaking) { started = true; speechSynthesis.resume(); }
+            if (speechSynthesis.speaking) { started = heard = true; speechSynthesis.resume(); }
             else if (!speechSynthesis.pending && started) fin(true);
           }, 500);
           setTimeout(() => fin(false), 4000 + (text.length * 160) / u.rate);
@@ -479,8 +492,85 @@
       });
     }
     function stop() { if (ok) { speechSynthesis.cancel(); clearInterval(keepAlive); } }
-    return { ok, speak, stop, voiceCount: () => voices.length, locales: () => uniq(voices.map(loc)) };
+    return {
+      ok, speak, stop,
+      voiceCount: () => voices.length,
+      locales: () => uniq(voices.map(loc)),
+      // The device lists voices but none is English: English is read by another language's
+      // voice, or not at all.
+      noEnglish: () => ok && reported && !voices.length,
+      // The device listed no voices at all, so only a failed attempt tells us anything.
+      unknown: () => ok && loaded && !reported,
+      heard: () => heard
+    };
   })();
+
+  // When audio cannot work, say why and how to fix it, instead of failing silently.
+  const voiceFixHtml = () => `
+    <div class="voice-warn">
+      <p>لا يجد التطبيق صوتًا إنجليزيًا في جهازك، لذلك لا تعمل أزرار «استمع» كما ينبغي. ثبّت صوتًا إنجليزيًا مرة واحدة، وهو مجاني، ثم أعد فتح التطبيق.</p>
+      <div><strong>أندرويد</strong>
+        <ol class="small">
+          <li>افتح الإعدادات وابحث عن «تحويل النص إلى كلام».</li>
+          <li>اختر محرك ${enSpan('Google')}، ثم افتح إعداداته واختر «تثبيت بيانات الصوت».</li>
+          <li>نزّل الإنجليزية، ويُفضّل أكثر من لهجة.</li>
+        </ol></div>
+      <div><strong>آيفون</strong>
+        <ol class="small">
+          <li>الإعدادات › تسهيلات الاستخدام › المحتوى المنطوق › الأصوات.</li>
+          <li>اختر الإنجليزية ونزّل صوتًا واحدًا على الأقل.</li>
+        </ol></div>
+      <p class="muted small">إن لم ينجح ذلك، افتح التطبيق في متصفح ${enSpan('Chrome')} أو ${enSpan('Safari')}.</p>
+    </div>`;
+  const voiceStatusHtml = () =>
+    !TTS.ok ? `<div class="note voice-warn"><strong>الصوت غير مدعوم في هذا المتصفح</strong><p class="small">افتح التطبيق في ${enSpan('Chrome')} أو ${enSpan('Safari')}.</p></div>`
+    : TTS.noEnglish() ? `<div class="note">${voiceFixHtml()}</div>`
+    : TTS.voiceCount() ? `<p class="small">${icon('check', 'inline-ico')} الأصوات الإنجليزية في جهازك: <span class="num">${TTS.voiceCount()}</span></p>`
+    : TTS.unknown() ? `<details class="acc"><summary>اضغط «جرّب الصوت». لم تسمع شيئًا؟ <span class="chev">${icon('down')}</span></summary><div class="acc-body">${voiceFixHtml()}</div></details>`
+    : '<p class="muted small">جارٍ البحث عن الأصوات…</p>';
+  // Settings shows the voice status; voices can arrive after the page is drawn.
+  document.addEventListener('voices', () => { const el = $('#voiceStatus'); if (el) el.innerHTML = voiceStatusHtml(); });
+  let voiceWarned = false;
+  function voiceProblem(failed) {
+    if (!failed && !TTS.noEnglish()) return;
+    if (voiceWarned) return;
+    voiceWarned = true;
+    if ($('.sheet-backdrop')) { toast('لا يوجد صوت إنجليزي في جهازك. انظر الإعدادات.'); return; }
+    openSheet('الصوت لا يعمل؟', voiceFixHtml());
+  }
+  // A modal bottom sheet with a close button; closes on Escape, a tap outside, or navigation.
+  let closeSheet = null;
+  function openSheet(title, body, opts = {}) {
+    if ($('.sheet-backdrop')) return null;
+    const back = document.activeElement;
+    const wrap = document.createElement('div');
+    wrap.className = 'sheet-backdrop';
+    wrap.innerHTML = `
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+        <div class="grabber"></div>
+        <div class="row" style="margin-bottom:10px">
+          <h2 id="sheetTitle" class="grow" style="margin:0;font-size:1.1rem">${esc(title)}</h2>
+          <button class="btn ghost small" type="button" data-close>إغلاق</button>
+        </div>
+        <div class="stack">${body}</div>
+      </div>`;
+    const close = (refocus = true) => {
+      wrap.remove();
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKey);
+      closeSheet = null;
+      stopAll();
+      const to = opts.focus ? $(opts.focus) : back;
+      if (refocus && to && to.isConnected) to.focus();
+    };
+    const onKey = e => { if (e.key === 'Escape') close(); };
+    wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    document.body.style.overflow = 'hidden';
+    $('[data-close]', wrap).focus();
+    closeSheet = close;
+  }
 
   let seqId = 0;
   function stopAll() { seqId++; TTS.stop(); Mic.stop(); }
@@ -489,7 +579,8 @@
     for (let i = 0; i < lines.length; i++) {
       if (my !== seqId) return false;
       if (onLine) onLine(i);
-      await TTS.speak(lines[i].en, { role: lines[i].s });
+      const r = await TTS.speak(lines[i].en, { role: lines[i].s });
+      voiceProblem(r === false && !TTS.heard());
       if (my !== seqId) return false;
       await wait(300);
     }
@@ -498,8 +589,10 @@
   }
   async function say(text, role, slow) {
     seqId++;
-    if (!TTS.ok) { toast('الصوت غير مدعوم في هذا المتصفح'); return false; }
-    return TTS.speak(text, { role, slow });
+    if (!TTS.ok) { toast('الصوت غير مدعوم في هذا المتصفح. جرّب Chrome أو Safari.'); return false; }
+    const r = await TTS.speak(text, { role, slow });
+    voiceProblem(r === false && !TTS.heard());
+    return r;
   }
 
   // =====================================================================
@@ -600,7 +693,9 @@
     return t.slice(0, max).replace(/\s+\S*$/, '').replace(/[\s:،,.؛;]+$/, '') + '…';
   }
   const enSpan = (s, cls = '') => `<span class="en ${cls}" lang="en" dir="ltr">${esc(s)}</span>`;
-  const bi = o => `${esc(o.ar)} ${enSpan(o.en, 'small muted')}`;
+  // Watch-out examples: the English on its own line (tap to hear), the Arabic meaning below it.
+  const watchList = items => !items || !items.length ? '' : `<ul class="watch-list">${items.map(x => `
+    <li><button class="say-line" type="button" data-say="${esc(x.say || x.en)}" data-role="k">${icon('volume')}<span lang="en" dir="ltr">${esc(x.en)}</span></button><span class="m">${esc(x.ar)}</span></li>`).join('')}</ul>`;
   const audioBtns = (text, role = 'k', slow = true) =>
     `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}">${icon('volume')}استمع</button>` +
     (slow ? `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}" data-slow="1">${icon('slow')}ببطء</button>` : '');
@@ -627,46 +722,20 @@
     if (link && link.getAttribute('href') === location.hash) { e.preventDefault(); render(); }
   });
 
-  let closeHelp = null;
   function openHelp() {
-    if ($('.sheet-backdrop')) return;
-    const wrap = document.createElement('div');
-    wrap.className = 'sheet-backdrop';
-    wrap.innerHTML = `
-      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
-        <div class="grabber"></div>
-        <div class="row" style="margin-bottom:10px">
-          <h2 id="helpTitle" class="grow" style="margin:0;font-size:1.1rem">عبارات سريعة</h2>
-          <button class="btn ghost small" type="button" data-close>إغلاق</button>
-        </div>
-        <p class="muted small" style="margin-bottom:12px">اضغط على العبارة لتسمعها، أو اعرضها للعميل.</p>
-        <div class="stack-lg">
-          ${P.quickHelp.map(g => `
-            <section class="stack">
-              <h3>${bi(g.group)}</h3>
-              ${g.items.map(i => `
-                <button class="phrase-btn" type="button" data-say="${esc(i.en)}" data-role="k">
-                  <span class="play">${icon('play')}</span>
-                  <span class="grow"><span class="say" lang="en" dir="ltr" style="display:block">${esc(i.en)}</span><span class="gloss">${esc(i.ar)}</span></span>
-                </button>`).join('')}
-            </section>`).join('')}
-        </div>
-      </div>`;
-    const close = (refocus = true) => {
-      wrap.remove();
-      document.body.style.overflow = '';
-      document.removeEventListener('keydown', onKey);
-      closeHelp = null;
-      stopAll();
-      if (refocus) $('#helpBtn').focus();
-    };
-    closeHelp = close;
-    const onKey = e => { if (e.key === 'Escape') close(); };
-    wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
-    document.addEventListener('keydown', onKey);
-    document.body.appendChild(wrap);
-    document.body.style.overflow = 'hidden';
-    $('[data-close]', wrap).focus();
+    openSheet('عبارات سريعة', `
+      <p class="muted small" style="margin-bottom:4px">اضغط على العبارة لتسمعها، أو اعرضها للعميل.</p>
+      <div class="stack-lg">
+        ${P.quickHelp.map(g => `
+          <section class="stack">
+            <h3>${esc(g.group.ar)}</h3>
+            ${g.items.map(i => `
+              <button class="phrase-btn" type="button" data-say="${esc(i.en)}" data-role="k">
+                <span class="play">${icon('play')}</span>
+                <span class="grow"><span class="say" lang="en" dir="ltr" style="display:block">${esc(i.en)}</span><span class="gloss">${esc(i.ar)}</span></span>
+              </button>`).join('')}
+          </section>`).join('')}
+      </div>`, { focus: '#helpBtn' });
   }
 
   function applySettings() {
@@ -780,7 +849,7 @@
     stopAll();
     cleanups.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
     cleanups = [];
-    if (closeHelp) closeHelp(false);
+    if (closeSheet) closeSheet(false);
 
     let path = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
     let m = match(path);
@@ -834,10 +903,18 @@
     const due = srsDue().length;
     const passed = UNITS.filter(u => unitPassed(u.id)).length;
     const weekUnit = UNITS.find(u => u.week === wk) || UNITS[0];
-    const missionDue = !S.missions[weekUnit.id];
+    const started = Object.keys(S.steps).length > 0;
+    // The mission is offered once the week's unit is under way, not before any learning.
+    const missionDue = !S.missions[weekUnit.id] && STEPS.some(st => st.id !== 'mission' && stepDone(weekUnit.id, st.id));
     const allPassed = passed === UNITS.length;
+    const entryCard = `
+        <a class="card unit-card" href="#/lc/entry">
+          <span class="unit-badge">${icon('headphones')}</span>
+          <span class="grow"><strong>${started ? 'اختبار الاستماع الأولي' : 'قبل أن تبدأ: اختبار استماع قصير'}</strong><br><span class="muted small">10 أسئلة قصيرة لقياس نقطة البداية</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>`;
 
-    let cards = '';
+    let cards = !S.lc.entry && !started ? entryCard : '';
     if (nx) {
       cards += `
         <a class="card unit-card" href="#/unit/${nx.unit.id}/${nx.step.id}">
@@ -872,31 +949,22 @@
           <span class="chev">${icon('next')}</span>
         </a>`;
     }
-    if (!S.lc.entry) {
-      cards += `
-        <a class="card unit-card" href="#/lc/entry">
-          <span class="unit-badge">${icon('headphones')}</span>
-          <span class="grow"><strong>اختبار الاستماع الأولي</strong><br><span class="muted small">10 أسئلة قصيرة لقياس نقطة البداية</span></span>
-          <span class="chev">${icon('next')}</span>
-        </a>`;
-    }
+    if (!S.lc.entry && started) cards += entryCard;
     view.innerHTML = `
       <div class="stack-lg">
         <section class="hero stack">
           <p class="small">الأسبوع ${wk} من ${P.meta.weeks} · ${esc(weekUnit.title.ar)}</p>
           <h2>مرحبًا${S.profile.name ? '، ' + esc(S.profile.name) : ''}!</h2>
+          ${started ? `
           ${progressBar(overallPct())}
           <div class="stat-grid">
             <div class="stat"><div class="v">${passed}/${UNITS.length}</div><div class="l">وحدات مجتازة</div></div>
             <div class="stat"><div class="v">${minutesLast7()}</div><div class="l">دقيقة هذا الأسبوع</div></div>
             <div class="stat"><div class="v">${due}</div><div class="l">للمراجعة</div></div>
-          </div>
+          </div>` : `
+          <p>${P.meta.weeks} وحدات، وحدة لكل أسبوع. كل يوم نحو 20 دقيقة من الخطوات القصيرة، ثم مهمة تطبّقها في عملك.</p>`}
         </section>
         <div class="stack">${cards || `<div class="card">${icon('check')}<p>لا شيء مطلوب الآن. أحسنت!</p></div>`}</div>
-        <button class="card tight row" type="button" data-help>
-          <span class="unit-badge">${icon('help')}</span>
-          <span class="grow"><strong>في العمل الآن؟</strong><br><span class="muted small">عبارات سريعة تسمعها وتعرضها للعميل</span></span>
-        </button>
       </div>`;
   }
 
@@ -1018,7 +1086,6 @@
               <span class="grow stack" style="gap:4px">
                 <span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}${u.week === wk ? ' · <strong style="color:var(--brand)">هذا الأسبوع</strong>' : ''}</span>
                 <strong>${esc(u.title.ar)}</strong>
-                ${enSpan(u.title.en, 'small muted')}
                 ${progressBar(pct(unitStepsDone(u.id), STEPS.length))}
                 <span class="muted small">${unitStepsDone(u.id)}/${STEPS.length} خطوات${best != null ? ` · اختبار الوحدة ${best}%` : ''}</span>
               </span>
@@ -1098,7 +1165,7 @@
             <ul class="outcomes">${unit.objectives.map(o => `<li>${icon('check')}<span>${esc(o.ar)}</span></li>`).join('')}</ul>
           </div>
         </details>
-        <div class="note"><strong>انتبه:</strong> ${rich(unit.watchOut.ar)}</div>
+        <div class="note stack" style="gap:6px"><strong>انتبه</strong>${unit.watchOut.note ? `<p class="small">${rich(unit.watchOut.note)}</p>` : ''}${watchList(unit.watchOut.items)}</div>
       </div>`;
   }
 
@@ -1393,7 +1460,7 @@
     let idx = 0, mistakes = 0, turns = 0;
     host.innerHTML = `
       <div class="card stack">
-        <h3>${esc(unit.roleplay.title.ar)} ${enSpan(unit.roleplay.title.en, 'small muted')}</h3>
+        <h3>${esc(unit.roleplay.title.ar)}</h3>
         <p class="muted small">${esc(unit.roleplay.setting.ar)} — ابنِ الحوار معنا: في كل دور لك، اختر الجملة المناسبة.</p>
       </div>
       <div class="dialogue" id="built"></div>
@@ -1461,7 +1528,7 @@
     let idx = 0, said = 0, micDisabled = false;
     host.innerHTML = `
       <div class="card stack">
-        <h3>${esc(unit.roleplay.title.ar)} ${enSpan(unit.roleplay.title.en, 'small muted')}</h3>
+        <h3>${esc(unit.roleplay.title.ar)}</h3>
         <p class="muted small">الآن دون خيارات: يتكلم العميل، وتقول أنت جملتك بالإنجليزية. ${micOn() ? 'اضغط الميكروفون وتكلم.' : 'قلها بصوت عالٍ ثم أظهر الإجابة.'}</p>
       </div>
       <div class="dialogue" id="rpLog"></div>
@@ -1724,7 +1791,7 @@
         <p class="en small muted ltr" lang="en">${esc(unit.mission.en)}</p>
       </div>
       <div class="card stack">
-        <h3>سجل المهمة ${enSpan('Mission log', 'small muted')}</h3>
+        <h3>سجل المهمة</h3>
         <label class="field">كم مرة استخدمت الإنجليزية مع عملاء هذا الأسبوع؟
           <input class="input num" id="mCount" type="number" inputmode="numeric" min="0" max="999" value="${m && m.count != null ? esc(m.count) : ''}">
         </label>
@@ -1749,7 +1816,7 @@
   // Practice
   // =====================================================================
   function viewPractice() {
-    setBar('التدريب', 'Practice');
+    setBar('التدريب', 'تمارين قصيرة لأي وقت');
     const due = srsDue().length;
     const tile = (href, ic, title, sub) => `
       <a class="card unit-card" href="${href}">
@@ -1771,7 +1838,7 @@
   }
 
   function viewNumbers() {
-    setBar('الأرقام والأسعار', 'Numbers and prices');
+    setBar('الأرقام والأسعار', 'اسمع السعر واكتبه');
     let mode = 'listen', right = 0, total = 0;
     view.innerHTML = `
       <div class="stack-lg">
@@ -1900,7 +1967,7 @@
   }
 
   function viewReview() {
-    setBar('المراجعة اليومية', 'Spaced review');
+    setBar('المراجعة اليومية', 'العبارات التي حان وقت مراجعتها');
     const due = shuffle(srsDue()).slice(0, 20);
     const learned = Object.keys(S.srs).filter(id => PH[id]);
     if (!due.length) {
@@ -1973,7 +2040,7 @@
   }
 
   function viewDialogues() {
-    setBar('الحوارات', 'Conversations');
+    setBar('الحوارات', 'استمع إلى حوارات الوحدات كاملة');
     view.innerHTML = `<div class="stack">${UNITS.map((u, i) => `
       <div class="card stack">
         <p class="muted small">الوحدة ${i + 1}: ${esc(u.title.ar)}</p>
@@ -1992,7 +2059,7 @@
       view.innerHTML = `
         <div class="stack-lg">
           <div class="card stack">
-            <h3>${esc(d.title.ar)} ${enSpan(d.title.en, 'small muted')}</h3>
+            <h3>${esc(d.title.ar)}</h3>
             <div class="row wrap">
               <button class="btn" type="button" data-act="play-all">${icon('play')} استمع للحوار كاملًا</button>
               <button class="btn ghost" type="button" data-act="hide" aria-pressed="${hideK}">${icon('eye')} ${hideK ? 'أظهر دوري' : 'أخفِ دوري'}</button>
@@ -2014,7 +2081,7 @@
   }
 
   function viewWatch() {
-    setBar('انتبه!', 'Watch out');
+    setBar('انتبه!', 'كلمات يسهل الخلط بينها');
     view.innerHTML = `
       <div class="stack">
         <p class="muted">كلمات تتشابه في النطق أو الشكل لكنها تختلف في المعنى، أو كلمات تُفهم خطأ عند الترجمة.</p>
@@ -2027,7 +2094,8 @@
                 <button class="word-btn" type="button" data-say="${esc(w.b)}" data-role="k">${icon('volume')}<span class="w" lang="en" dir="ltr">${esc(w.b)}</span><span class="m">${esc(w.bAr)}</span></button>` : ''}
               </div>
             </div>
-            <p class="small">${rich(w.note)}</p>
+            ${w.note ? `<p class="small">${rich(w.note)}</p>` : ''}
+            ${watchList(w.ex)}
           </div>`).join('')}
       </div>`;
   }
@@ -2036,7 +2104,7 @@
   // Progress, record, final assessment, survey
   // =====================================================================
   function viewProgress() {
-    setBar('تقدّمي', 'My progress');
+    setBar('تقدّمي', '');
     const passed = UNITS.filter(u => unitPassed(u.id)).length;
     const wkMinutes = [];
     const start = S.profile.startedAt || addDays(dayKey(), -7 * (P.meta.weeks - 1));
@@ -2054,7 +2122,7 @@
         </div>
 
         <div class="card stack">
-          <h3>اختبار الاستماع ${enSpan('Listening check', 'small muted')}</h3>
+          <h3>اختبار الاستماع</h3>
           <div class="compare">
             <div class="box"><div class="small muted">البداية</div><div class="v">${S.lc.entry ? `${S.lc.entry.score}/${S.lc.entry.total}` : '—'}</div></div>
             <div class="arrow">${icon('next')}</div>
@@ -2063,21 +2131,32 @@
           ${!S.lc.entry ? '<a class="btn soft small" href="#/lc/entry">أجرِ اختبار البداية</a>' : ''}
         </div>
 
-        <div class="card stack">
-          <h3>اختبارات الوحدات ${enSpan('Unit checks', 'small muted')}</h3>
-          <div class="table-scroll"><table class="plain">
-            <thead><tr><th>الوحدة</th><th>الخطوات</th><th>أفضل نتيجة</th><th>محاولات</th><th>الفائدة</th></tr></thead>
-            <tbody>${UNITS.map((u, i) => `<tr>
-              <td>${i + 1}. ${esc(u.title.ar)}</td>
-              <td class="num">${unitStepsDone(u.id)}/${STEPS.length}</td>
-              <td class="num">${checkBest(u.id) != null ? `<span class="pill ${unitPassed(u.id) ? 'good' : 'amber'}">${checkBest(u.id)}%</span>` : '—'}</td>
-              <td class="num">${(S.checks[u.id] || []).length}</td>
-              <td class="num">${S.pulses[u.id] ? S.pulses[u.id].useful + '/5' : '—'}</td></tr>`).join('')}</tbody>
-          </table></div>
-        </div>
+        <section class="stack">
+          <h3>الوحدات</h3>
+          ${UNITS.map((u, i) => {
+            const best = checkBest(u.id);
+            const tries = (S.checks[u.id] || []).length;
+            const pulse = S.pulses[u.id];
+            return `
+            <a class="card unit-card" href="#/unit/${u.id}">
+              <span class="unit-badge ${unitPassed(u.id) ? 'done' : ''}">${unitPassed(u.id) ? icon('check') : icon(u.icon)}</span>
+              <span class="grow stack" style="gap:6px">
+                <strong>${i + 1}. ${esc(u.title.ar)}</strong>
+                ${progressBar(pct(unitStepsDone(u.id), STEPS.length))}
+                <span class="unit-facts small">
+                  <span>الخطوات <b class="num">${unitStepsDone(u.id)}/${STEPS.length}</b></span>
+                  <span>الاختبار ${best != null ? `<span class="pill ${unitPassed(u.id) ? 'good' : 'amber'} num">${best}%</span>` : '<b>—</b>'}${tries ? ` <span class="muted">(${tries} ${tries === 1 ? 'محاولة' : tries === 2 ? 'محاولتان' : 'محاولات'})</span>` : ''}</span>
+                  ${pulse ? `<span>الفائدة <b class="num">${pulse.useful}/5</b></span>` : ''}
+                  <span>المهمة <b>${S.missions[u.id] ? '✓' : '—'}</b></span>
+                </span>
+              </span>
+              <span class="chev">${icon('next')}</span>
+            </a>`;
+          }).join('')}
+        </section>
 
         <div class="card stack">
-          <h3>وقت الدراسة حسب الأسبوع ${enSpan('Minutes per program week', 'small muted')}</h3>
+          <h3>دقائق الدراسة في كل أسبوع</h3>
           <div class="bars">${wkMinutes.map((m, i) => `<div class="bar-row"><span>الأسبوع ${i + 1}</span>${progressBar(pct(m, maxMin))}<span class="v">${m}</span></div>`).join('')}</div>
           <p class="muted small">الهدف: نحو ${P.meta.weeklyPattern[1].hours * 60} دقيقة أسبوعيًا على التطبيق. أيام النشاط: ${daysActive()}.</p>
         </div>
@@ -2111,12 +2190,12 @@
   }
 
   function viewRecord() {
-    setBar('سجل التعلّم', 'Learning record');
+    setBar('سجل التعلّم', 'اعرضه على مدربك أو مشرفك');
     view.innerHTML = `
       <div class="stack-lg">
         <div class="card stack" id="record">
           <div class="center stack" style="gap:2px">
-            <strong style="font-size:1.15rem">سجل التعلّم · ${enSpan('Learning record')}</strong>
+            <strong style="font-size:1.15rem">سجل التعلّم</strong>
             <span class="muted small">${esc(P.meta.subtitle.ar)}</span>
           </div>
           <table class="plain">
@@ -2180,7 +2259,7 @@
 
   function viewListeningCheck({ form }) {
     if (!['entry', 'exit'].includes(form)) { redirect('#/final'); return; }
-    setBar(form === 'entry' ? 'اختبار الاستماع: البداية' : 'اختبار الاستماع: النهاية', 'Listening check');
+    setBar('اختبار الاستماع', form === 'entry' ? 'نموذج البداية' : 'نموذج النهاية');
     const prev = S.lc[form];
     const intro = () => {
       view.innerHTML = `
@@ -2198,7 +2277,7 @@
   }
 
   function viewSurvey() {
-    setBar('استبانة نهاية البرنامج', 'End-of-program survey');
+    setBar('استبانة نهاية البرنامج', 'رأيك يساعدنا على تحسين البرنامج');
     const prev = S.survey || {};
     view.innerHTML = `
       <div class="stack-lg">
@@ -2230,7 +2309,7 @@
   // Settings
   // =====================================================================
   function viewSettings() {
-    setBar('الإعدادات', 'Settings');
+    setBar('الإعدادات', '');
     const st = S.settings;
     const seg = (name, opts, cur) => `<div class="seg" role="group">${opts.map(([v, l]) => `<button type="button" data-set="${name}" data-v="${v}" aria-pressed="${String(cur) === String(v)}">${l}</button>`).join('')}</div>`;
     view.innerHTML = `
@@ -2248,7 +2327,8 @@
           ${seg('rate', [[0.8, 'أبطأ'], [1, 'عادية'], [1.15, 'أسرع']], st.rate)}
           <p class="small">لهجات العملاء</p>
           ${seg('accent', [['mix', 'متنوعة'], ['us', 'أمريكية'], ['gb', 'بريطانية']], st.accent)}
-          <p class="muted small">«متنوعة» تستخدم ما يتوفر في جهازك من لهجات (هندية، بريطانية، أسترالية…) لأن عملاءك من بلدان كثيرة. الأصوات المتاحة: ${TTS.ok ? TTS.voiceCount() : 0}.</p>
+          <p class="muted small">«متنوعة» تستخدم ما يتوفر في جهازك من لهجات (هندية، بريطانية، أسترالية…) لأن عملاءك من بلدان كثيرة.</p>
+          <div id="voiceStatus">${voiceStatusHtml()}</div>
           <button class="btn ghost small" type="button" data-say="Hello! Welcome. How can I help you?" data-role="c">${icon('volume')} جرّب الصوت</button>
           <label class="switch-row"><span>التدريب بالميكروفون ${Mic.ok ? '' : '<span class="muted small">(غير مدعوم في هذا المتصفح)</span>'}</span><span class="switch"><input type="checkbox" id="sMic" ${st.mic && Mic.ok ? 'checked' : ''} ${Mic.ok ? '' : 'disabled'}><span></span></span></label>
         </div>
@@ -2486,7 +2566,7 @@
             <span class="gloss small" dir="rtl" lang="ar">${esc(p.t.ar)}</span>
             ${p.body}
           </div>`).join('')}
-        <div class="note stack" style="gap:4px"><strong>Watch out</strong><p dir="rtl" lang="ar">${rich(unit.watchOut.ar)}</p></div>
+        <div class="note stack" style="gap:4px"><strong>Watch out</strong><p>${esc(unit.watchOut.en)}</p><ul class="ltr">${unit.watchOut.items.map(x => `<li>${esc(x.en)} <span class="gloss" dir="rtl" lang="ar">${esc(x.ar)}</span></li>`).join('')}</ul></div>
         ${i === UNITS.length - 1 ? `<div class="note brand"><strong>Exit role-plays:</strong> <span class="ltr" lang="en">run X1–X3 at the end of this week with two raters.</span> <a href="#/trainer/cards">Cards</a> · <a href="#/trainer/rate">Rate</a></div>` : ''}
       </div>`;
   }
