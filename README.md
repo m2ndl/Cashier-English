@@ -56,6 +56,7 @@ The app's content comes from `js/program.js`. These values were drafted for this
    - Unit checks pass at 80% (`meta.passMark`).
 5. **Credits.** `meta.designer` and `meta.context` are blank. Fill them in to show your name and the course on the design page.
 6. **Trainer code.** `meta.trainerCode` (default `7310`) opens the trainer area, which holds the exit role-plays. Change it and give it to trainers only. It keeps learners from browsing the assessment pages, but it is not a password: anyone who reads `program.js` can see it. A device stays unlocked until the trainer taps **أغلق صفحات المدربين** in the trainer area.
+7. **Daily goal.** `meta.dailyMinutes` (20) is the daily app time that Home shows learners against today's minutes.
 
 ## Editing content
 
@@ -68,7 +69,10 @@ Everything the app shows is defined in `js/program.js`, and no other file needs 
 - `roleplay` is the conversation used for the build and role-play steps.
 - `workshop` holds the trainer's notes.
 - `watchOut` lists easily confused words as `items` (`en`, `ar`, and an optional `say` when the spoken form differs from the written one, as in `thir-TEEN`), with an optional short Arabic `note`.
-- `mission` is the task done at work.
+- `mission` is the task done at work:
+  - `ar` and `en` describe it.
+  - `short` is a one-line Arabic summary for Home.
+  - `items` lists the English lines to use, in the same form as the `watchOut` items. They show as tap-to-hear lines under the Arabic text.
 
 Keep English sentences out of Arabic text: put them in an `items` or `ex` list so they show on their own line. For a single English word inside Arabic text, wrap it in backticks (`` `like this` ``) so it displays left to right inside the sentence.
 

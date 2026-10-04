@@ -2,7 +2,9 @@
 
 October 2026 · app version 2.2.0 (commit `75fc789`). Line numbers refer to that commit.
 
-**Status, version 2.3.0:** findings 1–5 are fixed, and each of those sections ends with what changed. Findings 6–15 are still open.
+**Status:** all 15 findings are fixed: 1–5 in version 2.3.0 and 6–15 in version 2.4.0. Each section ends with what changed. The recorded-audio suggestion under "Beyond the interface" is still open.
+
+After the fixes, axe-core reports no violations on 66 screens. That includes the trainer pages, scanned after unlocking. No screen has horizontal overflow, touch targets under 44 px or text under 13 px.
 
 ## How the app was evaluated
 
@@ -43,16 +45,16 @@ Most of the fixes are small.
 | 3 | High | Progress can silently disappear, because it is kept only in browser storage | M | Fixed in 2.3.0 |
 | 4 | High | Learners can open the trainer area, including the exit role-play scripts | S–M | Fixed in 2.3.0 (code gate) |
 | 5 | Medium | A teal outline frames the whole screen on first open and during keyboard use | XS | Fixed in 2.3.0 |
-| 6 | Medium | The app never asks for the learner's name, so the shared record says "—" | S | Open |
-| 7 | Medium | Learners can copy the dialogue-ordering task from the transcript above it | S | Open |
-| 8 | Medium | Lessons carry too much chrome, Back steps through history, and leaving a quiz discards it silently | M | Open |
-| 9 | Medium | The step-progress strip barely shows which steps are done | XS | Open |
-| 10 | Medium | English sentences inside Arabic text break across lines | S | Open |
-| 11 | Medium | Home doesn't highlight the next action or show the daily goal | S | Open |
-| 12 | Medium | The listening check spends one of its two plays automatically and has no "don't know" option | S | Open |
-| 13 | Low | Accessibility gaps found by axe | S | Open |
-| 14 | Low | Arabic plural forms | XS | Open |
-| 15 | Low | Smaller polish items | XS | Open |
+| 6 | Medium | The app never asks for the learner's name, so the shared record says "—" | S | Fixed in 2.4.0 |
+| 7 | Medium | Learners can copy the dialogue-ordering task from the transcript above it | S | Fixed in 2.4.0 |
+| 8 | Medium | Lessons carry too much chrome, Back steps through history, and leaving a quiz discards it silently | M | Fixed in 2.4.0 |
+| 9 | Medium | The step-progress strip barely shows which steps are done | XS | Fixed in 2.4.0 |
+| 10 | Medium | English sentences inside Arabic text break across lines | S | Fixed in 2.4.0 |
+| 11 | Medium | Home doesn't highlight the next action or show the daily goal | S | Fixed in 2.4.0 |
+| 12 | Medium | The listening check spends one of its two plays automatically and has no "don't know" option | S | Fixed in 2.4.0 |
+| 13 | Low | Accessibility gaps found by axe | S | Fixed in 2.4.0 |
+| 14 | Low | Arabic plural forms | XS | Fixed in 2.4.0 |
+| 15 | Low | Smaller polish items | XS | Fixed in 2.4.0 |
 
 ### 1. Quiz feedback and التالي fall below the fold
 
@@ -188,7 +190,10 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
 
 **What happens.** The name and store fields exist only in Settings (`js/app.js:2319`). The learning record, which learners are told to show their trainer, therefore prints **المتدرب —** (`js/app.js:2202`). So does the shared text (`js/app.js:2174`).
 
-**Fix.** Ask once, as an optional question with a skip, on first open. Alternatively, ask when the learner opens the record or taps **مشاركة** without a name set.
+**Status: fixed in 2.4.0.**
+
+- **Home.** The welcome card asks new learners for their name, with a short note on why. The field is optional, and it goes away once a name is saved or the learner starts.
+- **Learning record.** The record page asks for the name when it is missing. Tapping **مشاركة** without a name points to the field once; a second tap shares anyway.
 
 ### 7. The ordering task can be copied
 
@@ -196,7 +201,11 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
 
 <img src="ux-eval/model-order-task.webp" width="270" alt="The ordering task directly under the transcript">
 
-**Fix.** When ordering starts, collapse the transcript into an audio-only player that can play the whole dialogue or replay a line. Show the text once the task is done.
+**Status: fixed in 2.4.0.** The step now has three stages:
+
+1. **Study.** The learner reads and hears the dialogue first.
+2. **Ordering.** **جاهز؟ رتّب الحوار** starts the ordering task. The transcript is hidden, but **استمع للحوار كاملًا** still plays it.
+3. **Review.** Once the order is right, the full transcript comes back as a folded **نص الحوار كاملًا** section.
 
 ### 8. Lesson chrome and navigation
 
@@ -212,6 +221,12 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
 - replace the back arrow with **×**, which returns to the unit page
 - ask for confirmation before discarding an activity in progress
 
+**Status: fixed in 2.4.0.**
+
+- **Lesson mode.** Unit steps hide the tab bar, and the header button becomes **×** (**إغلاق الدرس**). It goes straight back to the unit page, skipping the steps visited on the way.
+- **Leave confirmation.** Leaving a unit check, the "understand the customer" quiz, a role-play, the build or ordering task, the speed round or the listening check part-way now asks first. This covers the phone's back button, links, tabs and ×. If the learner stays, the activity keeps its state.
+- **Effect.** With the extra space, the strict thumb test needs no forced scrolls at 360×640, down from 3 in version 2.3.0.
+
 ### 9. The step strip barely shows progress
 
 **What happens.** The strip colours each step by its position, not by whether it is complete (`js/app.js:1183-1185`). Steps already passed use `#e1f0ed` and steps still ahead use `#eeece4`. These two colours have a contrast ratio of 1.01:1, and each has 1.07:1 against the page background, so they look the same. WCAG 1.4.11 asks for 3:1 for graphics that carry meaning. All progress bars use the same faint track.
@@ -223,6 +238,15 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
   - **current:** outlined
   - **to do:** a darker grey
 - Darken the track.
+
+**Status: fixed in 2.4.0.**
+
+- **Completion.** The strip now shows completion, not position:
+  - done steps are filled
+  - steps still to do are outlined in a grey with 3:1 contrast against the page
+  - the current step is taller
+- **Text alternative.** The strip has `role="img"` and a label such as "الخطوة 3 من 9، أنجزت 2 من 9".
+- **Track.** Progress-bar tracks use a darker `--track` colour.
 
 ### 10. English sentences inside Arabic text break across lines
 
@@ -240,6 +264,12 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
 - Give each mission a short Arabic-only summary for Home.
 - Put the English trainer titles on their own line.
 
+**Status: fixed in 2.4.0.**
+
+- **Missions.** The three missions keep their English lines in a new `items` list, shown as tap-to-hear lines with the Arabic meaning below. Their Arabic text no longer contains English.
+- **Home.** Every mission has a short Arabic-only `short` summary, which Home shows.
+- **Trainer hub.** The English titles sit on their own line.
+
 ### 11. Home doesn't highlight the next action
 
 **What happens.**
@@ -255,6 +285,12 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
 - Add a **تابع** button to the hero, as on the unit page.
 - Show progress against the target, either "اليوم: 12 / 20 دقيقة" or this week's minutes against 120.
 
+**Status: fixed in 2.4.0.**
+
+- **Next-action button.** The welcome card ends with a button for the one next thing to do: the entry listening check for a new learner, then **تابع: <step>**, then the final assessment. That step is no longer repeated as a card.
+- **New learners.** They also get a smaller **أو ابدأ الوحدة 1 مباشرة** card.
+- **Daily goal.** The stats show today's minutes against the daily goal, for example 12/20. The goal is `meta.dailyMinutes`, default 20.
+
 ### 12. The listening check plays automatically and has no "don't know" option
 
 **What happens.**
@@ -268,6 +304,12 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
 - Don't auto-play in the check, or don't count the automatic play.
 - Add a **لا أعرف** option.
 
+**Status: fixed in 2.4.0.**
+
+- **No automatic play.** Each item waits for the learner to press play, and both plays are theirs.
+- **Don't know.** **لا أعرف** records an unanswered item, with `ans: null`, instead of a guess.
+- **Intro.** The check's intro explains both rules.
+
 ### 13. Accessibility gaps found by axe
 
 | Issue | Where | Fix |
@@ -278,6 +320,15 @@ The scripts and the exit listening-check items are still in the JavaScript sourc
 | The 21 audio buttons on the trainer role-play cards have no text label and are 36×28 px | `js/app.js:2598` | Add labels and enlarge them |
 | `.table-scroll` regions can't be reached by keyboard | `css/app.css:551` (class) | Add `tabindex="0"` and a label |
 | The bottom sheet doesn't keep focus inside while open | `js/app.js:543` | Trap focus in the sheet |
+
+**Status: fixed in 2.4.0.** All six issues in the table are fixed:
+
+- the screen title is an `h1`, and top-level card titles are `h2`
+- every progress bar has a name
+- the step strip has `role="img"` with a label
+- the trainer play buttons are labelled and 44 px
+- scrollable tables are focusable regions with names
+- the sheet makes the page behind it `inert` and keeps Tab inside
 
 ### 14. Arabic plural forms
 
@@ -292,6 +343,11 @@ Counts above one always use the same plural form, which is often wrong:
 
 These strings are at `js/app.js:940`, `1994`, `2148` and `2214`. `Intl.PluralRules('ar')` returns the right category for each count (zero, one, two, few, many or other).
 
+**Status: fixed in 2.4.0.**
+
+- A `countAr()` helper uses `Intl.PluralRules('ar')`.
+- Each word has a nominative and a genitive dual where the case needs one. For example, «مراجعة اليوم: عبارتان» but «أنهيت مراجعة عبارتين».
+
 ### 15. Smaller polish items
 
 - **Naming:** quick phrases goes by three names, **عبارات سريعة** on the tab and the sheet, and **مساعدة سريعة** and **عبارات الطوارئ** on the Practice tile (`js/app.js:1833-1836`).
@@ -301,11 +357,22 @@ These strings are at `js/app.js:940`, `1994`, `2148` and `2214`. `Intl.PluralRul
 - **Sticky hover:** hover borders stay on after a tap on touch screens (`css/app.css:185`, `240`, `333`, `373`, `422`, `529`). Wrap the hover rules in `@media (hover: hover)`.
 - **Tab labels:** they are 12.5 px, the only text under 13 px (`css/app.css:159`), and **عبارات سريعة** wraps onto two lines at 320 px.
 
+**Status: fixed in 2.4.0.**
+
+- **Naming.** The feature is called **عبارات سريعة** everywhere.
+- **Large type.** Each quick phrase has a large-type button that shows it full screen for a customer. Escape or **إغلاق** returns to the sheet.
+- **Numbers subtitle.** The subtitle follows the selected mode.
+- **Review grades.** The three grades look the same.
+- **Hover.** All hover styles are inside `@media (hover: hover)`.
+- **Tab labels.** They are 13 px, and the quick-phrases tab is a little wider, so its label stays on one line down to 320 px.
+
 ## Beyond the interface
 
 The entry and exit listening checks use the phone's speech voices. The same test therefore sounds different from phone to phone, and some phones play nothing at all. Since the check is a pre/post measure, recording audio for its 20 items would make scores comparable across learners.
 
 ## Suggested order
+
+The fixes are all in place, so this is the order they were planned in.
 
 1. **Quick fixes:** #5, #1 (quick version), #2, #9 and #14.
 2. **Before the pilot:** #3, #4, #6 and #12.
