@@ -66,9 +66,10 @@ Everything the app shows is defined in `js/program.js`, and no other file needs 
 - `model` is the model conversation. Each line's `st` value names its genre stage; the first line of each stage is used in the ordering task.
 - `roleplay` is the conversation used for the build and role-play steps.
 - `workshop` holds the trainer's notes.
+- `watchOut` lists easily confused words as `items` (`en`, `ar`, and an optional `say` when the spoken form differs from the written one, as in `thir-TEEN`), with an optional short Arabic `note`.
 - `mission` is the task done at work.
 
-In Arabic text, wrap English words in backticks (`` `like this` ``) so they display left to right inside the sentence.
+Keep English sentences out of Arabic text: put them in an `items` or `ex` list so they show on their own line. For a single English word inside Arabic text, wrap it in backticks (`` `like this` ``) so it displays left to right inside the sentence.
 
 Three phrase tags keep the auto-generated wrong answers clearly wrong:
 
@@ -89,6 +90,7 @@ Progress is stored only in the browser on the learner's device (`localStorage`).
 ## Browser notes
 
 - **Voices:** speech uses the voices installed on the device. The "mixed accents" setting rotates through whichever English voices are available, such as Indian, British, Australian and US.
+- **No English voice:** if the device lists voices but none is English, or audio fails to start, the app explains how to install an English voice (Android and iPhone steps). **Settings** shows the same status.
 - **Microphone practice:** this is optional. It uses the browser's speech recognition, which Chrome and Safari provide. In Chrome it needs an internet connection.
 
 ## References
