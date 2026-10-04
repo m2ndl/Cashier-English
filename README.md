@@ -10,7 +10,7 @@ The app is a static web app with no build step and no server. It is Arabic-first
 
 ## How the app maps to the program design
 
-The design follows Macalister and Nation's (2020) curriculum design model. Every part of the model has a place in the app, and the trainer area (**Settings › للمدربين**) shows the full design.
+The design follows Macalister and Nation's (2020) curriculum design model. Every part of the model has a place in the app, and the trainer area (**Settings › للمدربين**, opened with the trainer code) shows the full design.
 
 | Design component | Where it lives in the app |
 |---|---|
@@ -55,6 +55,7 @@ The app's content comes from `js/program.js`. These values were drafted for this
    - Role-plays pass at a mean total of at least 12 out of 16, with no criterion mean below 2. These values are `rubric.passTotal` and `rubric.minCriterion`.
    - Unit checks pass at 80% (`meta.passMark`).
 5. **Credits.** `meta.designer` and `meta.context` are blank. Fill them in to show your name and the course on the design page.
+6. **Trainer code.** `meta.trainerCode` (default `7310`) opens the trainer area, which holds the exit role-plays. Change it and give it to trainers only. It keeps learners from browsing the assessment pages, but it is not a password: anyone who reads `program.js` can see it. A device stays unlocked until the trainer taps **أغلق صفحات المدربين** in the trainer area.
 
 ## Editing content
 
@@ -86,6 +87,13 @@ Three phrase tags keep the auto-generated wrong answers clearly wrong:
 ## Data and privacy
 
 Progress is stored only in the browser on the learner's device (`localStorage`). There is no server, no account and no analytics. Learners can share or print their learning record, and both learners and trainers can export JSON. Trainer ratings export as CSV.
+
+Browser storage can be lost, so the app protects it in four ways:
+
+- **Install prompt.** Home asks learners to install the app. On Android it uses the browser's install prompt or menu. On iPhone it shows the Share › Add to Home Screen steps, because Safari deletes a site's data after seven days of use without a visit, and Home Screen apps are exempt. A Home Screen app on iPhone starts with empty storage, so learners who already have progress tap **انسخ تقدّمي** in the browser and **الصق تقدّمي** in the installed app.
+- **Persistent storage.** Once there is progress, the app asks the browser to keep its storage (`navigator.storage.persist()`).
+- **Save warning.** If saving fails, for example in private browsing or when the device is full, the app says so once and offers a backup file.
+- **Weekly reminder.** Once a week, Home reminds learners to send their learning record to the trainer. Where the phone can share files, the record goes with a backup file (`.txt`, holding the same JSON as the export) that **Settings › استيراد** accepts. Trainers can keep these files as backups and as the exported learner records in the evaluation plan.
 
 ## Browser notes
 

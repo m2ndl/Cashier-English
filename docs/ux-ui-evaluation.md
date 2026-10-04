@@ -2,6 +2,8 @@
 
 October 2026 · app version 2.2.0 (commit `75fc789`). Line numbers refer to that commit.
 
+**Status, version 2.3.0:** findings 1–5 are fixed, and each of those sections ends with what changed. Findings 6–15 are still open.
+
 ## How the app was evaluated
 
 - I read `index.html`, `css/app.css` and `js/app.js` in full, and reviewed how the content in `js/program.js` is structured.
@@ -34,23 +36,23 @@ Most of the fixes are small.
 
 ## Findings
 
-| # | Priority | Finding | Effort |
-|---|---|---|---|
-| 1 | High | Quiz feedback and **التالي** fall below the fold on common phones | S |
-| 2 | High | Unit-check results open half-scrolled, and a learner who failed sees a survey before any way to recover | S |
-| 3 | High | Progress can silently disappear, because it is kept only in browser storage | M |
-| 4 | High | Learners can open the trainer area, including the exit role-play scripts | S–M |
-| 5 | Medium | A teal outline frames the whole screen on first open and during keyboard use | XS |
-| 6 | Medium | The app never asks for the learner's name, so the shared record says "—" | S |
-| 7 | Medium | Learners can copy the dialogue-ordering task from the transcript above it | S |
-| 8 | Medium | Lessons carry too much chrome, Back steps through history, and leaving a quiz discards it silently | M |
-| 9 | Medium | The step-progress strip barely shows which steps are done | XS |
-| 10 | Medium | English sentences inside Arabic text break across lines | S |
-| 11 | Medium | Home doesn't highlight the next action or show the daily goal | S |
-| 12 | Medium | The listening check spends one of its two plays automatically and has no "don't know" option | S |
-| 13 | Low | Accessibility gaps found by axe | S |
-| 14 | Low | Arabic plural forms | XS |
-| 15 | Low | Smaller polish items | XS |
+| # | Priority | Finding | Effort | Status |
+|---|---|---|---|---|
+| 1 | High | Quiz feedback and **التالي** fall below the fold on common phones | S | Fixed in 2.3.0 |
+| 2 | High | Unit-check results open half-scrolled, and a learner who failed sees a survey before any way to recover | S | Fixed in 2.3.0 |
+| 3 | High | Progress can silently disappear, because it is kept only in browser storage | M | Fixed in 2.3.0 |
+| 4 | High | Learners can open the trainer area, including the exit role-play scripts | S–M | Fixed in 2.3.0 (code gate) |
+| 5 | Medium | A teal outline frames the whole screen on first open and during keyboard use | XS | Fixed in 2.3.0 |
+| 6 | Medium | The app never asks for the learner's name, so the shared record says "—" | S | Open |
+| 7 | Medium | Learners can copy the dialogue-ordering task from the transcript above it | S | Open |
+| 8 | Medium | Lessons carry too much chrome, Back steps through history, and leaving a quiz discards it silently | M | Open |
+| 9 | Medium | The step-progress strip barely shows which steps are done | XS | Open |
+| 10 | Medium | English sentences inside Arabic text break across lines | S | Open |
+| 11 | Medium | Home doesn't highlight the next action or show the daily goal | S | Open |
+| 12 | Medium | The listening check spends one of its two plays automatically and has no "don't know" option | S | Open |
+| 13 | Low | Accessibility gaps found by axe | S | Open |
+| 14 | Low | Arabic plural forms | XS | Open |
+| 15 | Low | Smaller polish items | XS | Open |
 
 ### 1. Quiz feedback and التالي fall below the fold
 
@@ -78,6 +80,24 @@ A 360×640 viewport is roughly what a 360×800 Android phone shows in Chrome whi
 - **Quick fix:** after an answer, call `$('#qnext', host).scrollIntoView({ block: 'nearest', behavior: 'smooth' })`, and start each `draw()` with `window.scrollTo(0, 0)`. Do the same in `lcRunner`, `viewNumbers` and the review deck.
 - **Better fix:** add an answer bar holding the feedback and **التالي** that slides up in place of the tab bar during activities (see #8).
 
+**Status: fixed in 2.3.0.**
+
+- Each question, phrase card, review card and results screen now starts at the top.
+- After an answer, the page scrolls just far enough to show the feedback. The scroll clears the app bar, the tab bar and the new action bar.
+- **التالي** and the other main buttons (phrase navigation, review grades, finishing the ordering task) sit in an action bar that stays just above the tab bar while the page scrolls.
+- The build, role-play, ordering and numbers screens scroll each new turn, hint or answer into view.
+- The question card is about 70 px shorter: a smaller play button, less padding, and the prompt and **إظهار النص** on one line. All four options now fit on a 360×640 screen.
+
+The strict thumb test below taps the last option and checks that the whole feedback box is visible. It was run on the old and new code:
+
+| Viewport | Forced scrolls, before → after | Answers with feedback hidden, before → after |
+|---|---|---|
+| 360×640 | 28 → 3 | 20 → 0 |
+| 360×740 | 18 → 0 | 16 → 0 |
+| 320×568 | 29 → 16 | 24 → 0 |
+
+The counts cover Understand the customer, the unit check, key phrases and the review deck together. The three scrolls left at 360×640 are unit-check questions whose English answers wrap onto two lines, which pushes the fourth option below the fold.
+
 ### 2. Unit-check results open half-scrolled
 
 **What happens.**
@@ -94,6 +114,13 @@ A 360×640 viewport is roughly what a 360×800 Android phone shows in Chrome whi
 2. Put the next action directly under the score: **التالي** after a pass, or **راجع العبارات** and **أعد الاختبار** after a fail.
 3. Show the mistakes after that.
 4. Make the pulse a short optional card at the end.
+
+**Status: fixed in 2.3.0.** The results open at the top, in this order:
+
+1. the score
+2. the next action: **التالي** after a pass, or **راجع العبارات** (primary) and **أعد الاختبار** after a fail
+3. the mistakes
+4. the unit pulse
 
 ### 3. Progress can silently disappear
 
@@ -113,6 +140,16 @@ A 360×640 viewport is roughly what a 360×800 Android phone shows in Chrome whi
 - Warn once when a save fails.
 - Prompt weekly to send the learning record to the trainer. If the record includes the JSON export, it also works as a backup.
 
+**Status: fixed in 2.3.0.**
+
+- **Install card.** Home shows an install card until the app runs installed. Choosing **لاحقًا** hides it for three days.
+  - **Android:** the card uses Chrome's install prompt when there is one, and otherwise shows the browser-menu steps. It sits under the next step.
+  - **iPhone:** the card shows the Share › Add to Home Screen steps and comes first for new learners.
+- **Moving progress on iPhone.** A Home Screen app on iPhone keeps its storage separate from Safari, so it starts without the learner's progress. Learners who already have progress tap **انسخ تقدّمي** in the browser, then **الصق تقدّمي** on the installed app's Home. Pasting falls back to a paste box when clipboard access isn't available.
+- **Persistent storage.** `navigator.storage.persist()` is requested once there is progress.
+- **Save failures.** A failed save opens a one-time warning with a backup button.
+- **Weekly reminder.** Home reminds learners once a week to send their learning record. Where the phone can share files, **مشاركة** attaches a backup file as `.txt`, because Chrome won't share `.json` files. **Settings › استيراد** accepts both formats. Exporting or sharing a backup resets the reminder.
+
 ### 4. Learners can open the trainer area
 
 **What happens.**
@@ -126,6 +163,14 @@ A 360×640 viewport is roughly what a 360×800 Android phone shows in Chrome whi
 
 **Fix.** Remove the link from learner Settings and put the trainer area behind a code, even a fixed one shared at the trainer briefing. A code in a static app only stops casual browsing, so the sturdier fix is to keep the X1–X3 scripts out of the learner app entirely, for example on a trainer-only page.
 
+**Status: fixed in 2.3.0 with a code gate.**
+
+- Every trainer page now asks for `meta.trainerCode` in `js/program.js`. The default is `7310`; change it before the pilot.
+- Settings shows a small **للمدربين** link instead of a card that lists the trainer tools.
+- A device stays unlocked until the trainer taps **أغلق صفحات المدربين على هذا الجهاز**.
+
+The scripts and the exit listening-check items are still in the JavaScript source, so someone who reads the code can find them. Keeping them out of reach entirely would need a separate trainer-only file or a server.
+
 ### 5. A teal outline frames the whole screen
 
 **What happens.** After each render, the app focuses `<main tabindex="-1">` (`js/app.js:887`). The global `:focus-visible` rule (`css/app.css:111`) then draws a 3 px teal outline around the whole content area. Chrome treats focus as visible on first load and after keyboard use. As a result, learners see this frame whenever they open or reload the app, and keyboard users see it on every screen.
@@ -133,6 +178,11 @@ A 360×640 viewport is roughly what a 360×800 Android phone shows in Chrome whi
 <img src="ux-eval/focus-ring-desktop.webp" width="480" alt="Desktop view with a teal outline around the whole content column">
 
 **Fix.** Add `#view:focus { outline: none; }`. The main region is a programmatic focus target, not a control.
+
+**Status: fixed in 2.3.0.**
+
+- The outline on the main region is gone.
+- `scroll-padding` on the page keeps keyboard-focused elements clear of the app bar and the tab bar.
 
 ### 6. The app never asks for the learner's name
 

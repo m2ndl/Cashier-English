@@ -23,7 +23,7 @@
 window.PROGRAM = {
   meta: {
     id: "retail-english",
-    version: "2.2.0",
+    version: "2.3.0",
     title: { en: "Retail English" },
     subtitle: {
       en: "English for retail sales associates",
@@ -42,7 +42,11 @@ window.PROGRAM = {
       { hours: 1, en: "On-the-job mission with real customers", ar: "مهمة في مكان العمل مع عملاء حقيقيين" }
     ],
     mode: { en: "Blended", ar: "مدمج" },
-    passMark: 80 // unit checks, percent
+    passMark: 80, // unit checks, percent
+    // Opens the trainer area (Settings › للمدربين), which holds the exit role-plays.
+    // Give it to trainers only. It keeps learners from browsing the assessment pages,
+    // but it is not a password: anyone who reads this file can see it.
+    trainerCode: "7310"
   },
 
   // ---------------------------------------------------------------------------

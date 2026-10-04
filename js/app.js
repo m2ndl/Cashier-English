@@ -76,6 +76,7 @@
     upload: '<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19.5h14"/>',
     print: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v6H7z"/>',
     share: '<circle cx="17.5" cy="5.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/><path d="M8.7 10.8l6.6-4M8.7 13.2l6.6 4"/>',
+    shareIOS: '<path d="M12 14.5V3.5"/><path d="M8 7l4-4 4 4"/><path d="M8.5 10H6.5a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1h-2"/>',
     users: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4"/><path d="M17.5 14.2A6 6 0 0 1 21 20"/>',
     chat: '<path d="M4 5.5h16v10H10l-4.5 4v-4H4z"/>',
     complaint: '<path d="M4 5.5h16v10H10l-4.5 4v-4H4z"/><path d="M12 8v3.5M12 13.5h.01"/>',
@@ -170,7 +171,9 @@
       pulses: {},
       survey: null,
       best: {},
-      trainer: { ratings: [], pending: null, align: { A: null, B: null } }
+      trainer: { ratings: [], pending: null, align: { A: null, B: null }, unlocked: false },
+      backupAt: 0,     // when the learner last exported or shared a copy of their data
+      installLater: 0  // the install card stays hidden until this time
     };
   }
   // Saved and imported data is rebuilt field by field: only known keys, checked types and
@@ -275,7 +278,10 @@
         P.assessments.filter(x => x.summative).forEach(t => { map[t.id] = Array.isArray(a.map[t.id]) ? uniq(a.map[t.id].filter(id => PLO[id])) : []; });
         d.trainer.align[w] = { name: str(a.name, 60), map, at: num(a.at) };
       });
+      d.trainer.unlocked = T.unlocked === true;
     }
+    d.backupAt = num(r.backupAt);
+    d.installLater = num(r.installLater);
     return d;
   }
   function load() {
@@ -285,9 +291,14 @@
   }
   let S = load();
   let saveTimer = null;
+  let saveFailed = false;
   function save() {
     clearTimeout(saveTimer); saveTimer = null;
-    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage full or blocked */ }
+    try { localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch (e) {
+      // Storage is full or blocked: say so once, so the learner doesn't lose work unknowingly.
+      if (!saveFailed) { saveFailed = true; setTimeout(warnSaveFailed, 0); }
+    }
   }
   function saveSoon() { if (!saveTimer) saveTimer = setTimeout(save, 2000); }
   window.addEventListener('pagehide', save);
@@ -323,6 +334,7 @@
     if (typeof score === 'number') { rec.last = score; rec.best = Math.max(rec.best || 0, score); }
     S.steps[u][st] = rec;
     save();
+    keepStorage();
   }
   function checkBest(u) {
     const list = S.checks[u] || [];
@@ -570,6 +582,7 @@
     document.body.style.overflow = 'hidden';
     $('[data-close]', wrap).focus();
     closeSheet = close;
+    return wrap;
   }
 
   let seqId = 0;
@@ -701,6 +714,31 @@
     (slow ? `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}" data-slow="1">${icon('slow')}ببطء</button>` : '');
   const ploChips = ids => ids.map(id => `<span class="pill brand" title="${esc(PLO[id] ? PLO[id].en : id)}">${esc(id)}</span>`).join(' ');
   const progressBar = v => `<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><span style="width:${v}%"></span></div>`;
+  // Scrolling. Activities replace their content in place, so each new item starts at the top,
+  // and anything that appears below the fold (feedback, the next button) is scrolled into view.
+  const motionOK = () => !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let scrollSeq = 0;
+  // Chrome can commit one more frame of a smooth scroll that was still running, so the jump
+  // to the top is repeated on the next frame unless another scroll was asked for since.
+  function toTop() {
+    const my = ++scrollSeq;
+    window.scrollTo(0, 0);
+    requestAnimationFrame(() => { if (my === scrollSeq && window.scrollY) window.scrollTo(0, 0); });
+  }
+  // Scroll just enough to show el in full: below the app bar, above the tab bar, and above
+  // an activity's sticky action bar unless el is inside it.
+  function showEl(el) {
+    scrollSeq++;
+    if (!el || !el.isConnected) return;
+    const r = el.getBoundingClientRect();
+    if (!r.height) return;
+    const top = $('.app-bar').getBoundingClientRect().bottom + 8;
+    const bar = Math.max(0, ...$$('.action-bar', view).filter(b => !b.contains(el)).map(b => b.offsetHeight));
+    const bottom = $('.tab-bar').getBoundingClientRect().top - 8 - bar;
+    let dy = r.bottom > bottom ? r.bottom - bottom : 0;
+    if (r.top - dy < top) dy = r.top - top; // never push its top out of view
+    if (Math.abs(dy) > 2) window.scrollTo({ top: window.scrollY + dy, behavior: motionOK() ? 'smooth' : 'auto' });
+  }
   // Navigating to the current hash fires no hashchange, so re-render directly.
   const go = hash => { if (location.hash === hash) render(); else location.hash = hash; };
   // For invalid links: move on without leaving the bad address in the history.
@@ -796,6 +834,162 @@
   }
 
   // =====================================================================
+  // Keeping progress safe. Progress lives only in this browser's storage, which Safari on
+  // iPhone clears after seven days of use without a visit (Home Screen apps are exempt)
+  // and which other browsers may evict when the device is short of space.
+  // =====================================================================
+  const UA = navigator.userAgent || '';
+  const isIOS = /iPhone|iPad|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(UA);
+  const installed = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const hasProgress = () => Object.keys(S.steps).length > 0 || !!S.lc.entry;
+  // Anything a restore would overwrite, the trainer's ratings included.
+  const hasData = () => hasProgress() || !!S.lc.exit || Object.keys(S.srs).length > 0 || Object.keys(S.missions).length > 0 ||
+    !!S.survey || S.trainer.ratings.length > 0 || !!S.trainer.align.A;
+
+  let persistAsked = false;
+  // Ask the browser not to evict the data. Chrome and Safari decide silently; Firefox may ask.
+  function keepStorage() {
+    if (persistAsked) return;
+    persistAsked = true;
+    try {
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persisted().then(p => p || navigator.storage.persist()).catch(() => {});
+    } catch (e) { /* not supported */ }
+  }
+  function warnSaveFailed() {
+    const sheet = openSheet('لم يُحفظ تقدّمك', `
+      <p>لا يستطيع المتصفح حفظ تقدّمك على هذا الجهاز، لذلك قد يضيع عند إغلاق التطبيق.</p>
+      <p class="small muted">قد يكون السبب التصفح الخاص أو امتلاء ذاكرة الجهاز. احفظ نسخة من تقدّمك الآن، ثم افتح التطبيق في نافذة عادية.</p>
+      <button class="btn" type="button" data-act="export-now">${icon('download')} احفظ نسخة من تقدّمي</button>`);
+    if (!sheet) { toast('تعذّر حفظ تقدّمك على هذا الجهاز'); return; }
+    $('[data-act="export-now"]', sheet).addEventListener('click', exportData);
+  }
+
+  // Backups: a file the learner can keep or send to the trainer, and import again later.
+  const backupObj = () => ({ program: P.meta.id, version: P.meta.version, exportedAt: new Date().toISOString(), data: S });
+  const backupName = () => `${P.meta.id}-${(S.profile.name || 'learner').replace(/[^\w؀-ۿ-]+/g, '-')}-${dayKey()}`;
+  const markBackup = () => { S.backupAt = Date.now(); save(); };
+  // Shared as .txt because Chrome only shares a fixed list of file types; the import accepts both.
+  function backupFile() {
+    try { return new File([JSON.stringify(backupObj())], `${backupName()}.txt`, { type: 'text/plain' }); } catch (e) { return null; }
+  }
+  function readBackup(text) {
+    try {
+      const obj = JSON.parse(String(text || '').trim());
+      return isObj(obj) && isObj(obj.data) && obj.data.v === 2 ? obj.data : isObj(obj) && obj.v === 2 ? obj : null;
+    } catch (e) { return null; }
+  }
+  function restoreBackup(data, done) {
+    if (hasData() && !confirm('سيستبدل هذا بياناتك الحالية. هل تريد المتابعة؟')) return;
+    S = sanitize(data);
+    save(); applySettings();
+    toast(done);
+    render();
+  }
+  // Remind once a week to send the learning record, which carries a backup file.
+  const backupDue = () => {
+    if (!hasProgress()) return false;
+    const since = S.backupAt || (S.profile.startedAt ? new Date(S.profile.startedAt + 'T00:00:00').getTime() : Date.now());
+    return Date.now() - since >= 7 * 864e5;
+  };
+
+  // Installing. Chrome offers a one-tap install prompt; iPhone needs Share › Add to Home Screen.
+  // A Home Screen app on iPhone does not see the progress kept in Safari, so learners who have
+  // started copy it over first and paste it into the installed app.
+  let installEvent = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installEvent = e;
+    const card = $('#installCard');
+    if (card) card.outerHTML = installCardHtml();
+  });
+  window.addEventListener('appinstalled', () => { installEvent = null; const c = $('#installCard'); if (c) c.remove(); });
+  const showInstall = () => !installed() && !!(installEvent || isIOS || isAndroid) && !(S.installLater > Date.now());
+  function installCardHtml() {
+    let how;
+    if (installEvent) how = `<button class="btn block" type="button" data-act="install">${icon('download')} ثبّت التطبيق</button>`;
+    else if (isIOS) {
+      how = `
+        <ol class="steps-list small">
+          ${hasProgress() ? `<li>التطبيق المثبّت يبدأ فارغًا، فانسخ تقدّمك أولًا:<br><button class="btn soft small" type="button" data-act="copy-progress">${icon('copy')} انسخ تقدّمي</button></li>` : ''}
+          <li>اضغط زر المشاركة ${icon('shareIOS', 'inline-ico')} في المتصفح.</li>
+          <li>اختر «إضافة إلى الشاشة الرئيسية».</li>
+          <li>افتح التطبيق من الشاشة الرئيسية${hasProgress() ? '، واضغط فيه «الصق تقدّمي»' : '، وتدرّب منه دائمًا'}.</li>
+        </ol>`;
+    } else how = '<p class="small">افتح قائمة المتصفح ⋮ واختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</p>';
+    return `
+      <div class="card stack" id="installCard">
+        <div class="row" style="align-items:flex-start"><span class="unit-badge">${icon('download')}</span>
+          <span class="grow"><strong>ثبّت التطبيق على هاتفك</strong><br><span class="muted small">${isIOS
+            ? 'يفتح بلمسة واحدة ويحفظ تقدّمك. أما في المتصفح فقد يُحذف تقدّمك إذا لم تفتح التطبيق أسبوعًا.'
+            : 'يفتح بلمسة واحدة، ويعمل دون إنترنت، ويحفظ تقدّمك بأمان أكبر.'}</span></span>
+        </div>
+        ${how}
+        <button class="btn ghost small" type="button" data-act="install-later" style="align-self:flex-start">لاحقًا</button>
+      </div>`;
+  }
+  // Shown in a freshly installed iPhone app, until progress exists.
+  const moveCardHtml = () => `
+    <div class="card stack" id="moveCard">
+      <div class="row" style="align-items:flex-start"><span class="unit-badge">${icon('copy')}</span>
+        <span class="grow"><strong>بدأت التدريب في المتصفح؟</strong><br><span class="muted small">انقل تقدّمك إلى هنا: افتح التطبيق في المتصفح واضغط «انسخ تقدّمي»، ثم ارجع إلى هنا.</span></span>
+      </div>
+      <button class="btn soft" type="button" data-act="paste-progress">${icon('copy')} الصق تقدّمي</button>
+    </div>`;
+  async function doInstall() {
+    const ev = installEvent;
+    if (!ev) return;
+    installEvent = null;
+    try {
+      ev.prompt();
+      const choice = await ev.userChoice;
+      if (choice && choice.outcome === 'accepted') { const c = $('#installCard'); if (c) c.remove(); return; }
+    } catch (e) { /* show the manual steps instead */ }
+    const c = $('#installCard');
+    if (c) c.outerHTML = installCardHtml();
+  }
+  async function copyProgress() {
+    save();
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(backupObj()));
+      toast('نُسخ تقدّمك. أضف التطبيق الآن إلى الشاشة الرئيسية.');
+    } catch (e) {
+      exportData();
+      toast('تعذّر النسخ، فحُفظ تقدّمك في ملف. استورده من الإعدادات في التطبيق.');
+    }
+  }
+  async function pasteProgress() {
+    let text = null;
+    try { text = await navigator.clipboard.readText(); } catch (e) { text = null; }
+    if (text === null) { pasteSheet(); return; } // no clipboard access: paste by hand
+    const data = readBackup(text);
+    if (data) restoreBackup(data, 'نُقل تقدّمك');
+    else toast('لم أجد تقدّمًا منسوخًا. اضغط «انسخ تقدّمي» في المتصفح أولًا، ثم حاول مرة أخرى.');
+  }
+  function pasteSheet() {
+    const sheet = openSheet('الصق تقدّمك', `
+      <p class="small">المس المربع مطولًا واختر «لصق»، ثم اضغط «نقل».</p>
+      <textarea class="input" id="pasteBox" rows="4" dir="ltr" lang="en" autocomplete="off" aria-label="النص المنسوخ"></textarea>
+      <button class="btn" type="button" data-act="paste-go">نقل</button>`);
+    if (!sheet) return;
+    $('[data-act="paste-go"]', sheet).addEventListener('click', () => {
+      const data = readBackup($('#pasteBox', sheet).value);
+      if (data) restoreBackup(data, 'نُقل تقدّمك');
+      else toast('هذا ليس تقدّمًا منسوخًا من التطبيق');
+    });
+  }
+  const safeActs = {
+    install: doInstall,
+    'install-later': () => { S.installLater = Date.now() + 3 * 864e5; save(); const c = $('#installCard'); if (c) c.remove(); },
+    'copy-progress': copyProgress,
+    'paste-progress': pasteProgress
+  };
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]');
+    if (b && safeActs[b.dataset.act]) safeActs[b.dataset.act]();
+  });
+
+  // =====================================================================
   // Router
   // =====================================================================
   const ROUTES = [
@@ -854,6 +1048,8 @@
     let path = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
     let m = match(path);
     if (!m) { path = ''; m = match(''); }
+    // Trainer pages hold the exit assessments: they open only after the trainer code.
+    if (path.split('/')[0] === 'trainer' && !trainerOpen()) m = { fn: viewTrainerCode, params: {} };
     currentPath = path;
 
     if (replacing) { navStack[navStack.length - 1] = path; replacing = false; }
@@ -869,6 +1065,8 @@
     view.removeAttribute('dir');
     view.removeAttribute('lang');
     view.classList.remove('trainer');
+    // Start at the top before the view draws, so a view can scroll to what it shows next.
+    toTop();
     try { m.fn(m.params); }
     catch (err) {
       console.error(err);
@@ -883,7 +1081,6 @@
         S = fresh(); applySettings(); go('#/');
       });
     }
-    window.scrollTo(0, 0);
     view.focus({ preventScroll: true });
   }
   function goBack() {
@@ -914,7 +1111,12 @@
           <span class="chev">${icon('next')}</span>
         </a>`;
 
-    let cards = !S.lc.entry && !started ? entryCard : '';
+    // On iPhone, installing comes before anything else: progress made in the browser has to be
+    // moved by hand. Elsewhere it follows the next step.
+    const install = showInstall() ? installCardHtml() : '';
+    const installFirst = isIOS && !hasProgress();
+    let cards = installFirst ? install : '';
+    cards += !S.lc.entry && !started ? entryCard : '';
     if (nx) {
       cards += `
         <a class="card unit-card" href="#/unit/${nx.unit.id}/${nx.step.id}">
@@ -933,6 +1135,7 @@
           <span class="chev">${icon('next')}</span>
         </a>`;
     }
+    if (!installFirst) cards += install;
     if (due) {
       cards += `
         <a class="card unit-card" href="#/review">
@@ -950,6 +1153,15 @@
         </a>`;
     }
     if (!S.lc.entry && started) cards += entryCard;
+    if (backupDue()) {
+      cards += `
+        <a class="card unit-card" href="#/record">
+          <span class="unit-badge">${icon('share')}</span>
+          <span class="grow"><strong>أرسل سجلّك إلى المدرب</strong><br><span class="muted small">مرة كل أسبوع: يرى مدربك تقدّمك، وتبقى عنده نسخة منه إن ضاع هاتفك.</span></span>
+          <span class="chev">${icon('next')}</span>
+        </a>`;
+    }
+    if (isIOS && installed() && !hasProgress()) cards += moveCardHtml();
     view.innerHTML = `
       <div class="stack-lg">
         <section class="hero stack">
@@ -997,6 +1209,7 @@
                <button class="btn block" type="button" data-act="submit">التالي</button>`
             : optionButtons(it.options, false)}
         </div>`;
+      toTop();
       $('[data-act="play"]', host).addEventListener('click', play);
       if (it.t === 'price') {
         const submit = () => {
@@ -1052,6 +1265,7 @@
           </div>
           <button class="btn block" type="button" data-act="done">متابعة</button>
         </div>`;
+      toTop();
       $('[data-act="done"]', host).addEventListener('click', done);
     }
     draw();
@@ -1238,7 +1452,7 @@
       btn.innerHTML = `${icon('stop')} إيقاف`;
       await playLines(lines, i => {
         $$('.bubble', root).forEach(b => b.classList.remove('active'));
-        if (i >= 0) { const b = $(`.bubble[data-line="${i}"]`, root); if (b) { b.classList.add('active'); b.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }
+        if (i >= 0) { const b = $(`.bubble[data-line="${i}"]`, root); if (b) { b.classList.add('active'); showEl(b); } }
       });
       $$('.bubble', root).forEach(b => b.classList.remove('active'));
       if (btn.isConnected) { btn.dataset.state = ''; btn.innerHTML = `${icon('play')} استمع للحوار كاملًا`; }
@@ -1272,7 +1486,7 @@
         </div>
         <div id="orderFb"></div>
       </div>
-      <div id="modelNext"></div>`;
+      <div id="modelNext" class="action-bar"></div>`;
     wirePlayAll(host, m.lines);
     let pos = 0, mistakes = 0;
     $('#orderChoices', host).addEventListener('click', e => {
@@ -1288,12 +1502,14 @@
           markStep(u, 'model', pct(picks.length, picks.length + mistakes));
           $('#orderFb', host).innerHTML = feedback(true, 'أحسنت! رتّبت الحوار.', 'ستقول جملك بنفسك في خطوة لعب الأدوار.');
           $('#modelNext', host).innerHTML = nextBtn();
+          showEl($('#orderFb', host));
         }
       } else {
         mistakes++;
         b.classList.add('shake');
         setTimeout(() => b.classList.remove('shake'), 400);
         $('#orderFb', host).innerHTML = feedback(false, 'ليست هذه الجملة التالية. استمع مرة أخرى إن احتجت.');
+        showEl($('#orderFb', host));
       }
     });
   }
@@ -1329,10 +1545,11 @@
         <div class="activity-head">${progressBar(pct(i, list.length))}<span class="counter num">${i + 1} / ${list.length}</span></div>
         ${i === 0 ? '<div class="note brand"><strong>طريقة التدريب:</strong> استمع إلى كل عبارة ثم كررها بصوت عالٍ. استخدم «ببطء» إذا احتجت.</div>' : ''}
         ${phraseCard(p)}
-        <div class="grid-2">
+        <div class="action-bar"><div class="grid-2">
           <button class="btn ghost" type="button" data-act="prev" ${i === 0 ? 'disabled' : ''}>${icon('back')} السابق</button>
           <button class="btn" type="button" data-act="next">${i + 1 < list.length ? 'التالي' : 'إنهاء'} ${icon('next')}</button>
-        </div>`;
+        </div></div>`;
+      toTop();
       $('[data-act="prev"]', host).addEventListener('click', () => { if (i > 0) { i--; draw(); } });
       $('[data-act="next"]', host).addEventListener('click', () => { i++; if (i < list.length) draw(); else finish(); });
       say(p.c[0], 'c');
@@ -1349,6 +1566,7 @@
         </div>
         <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} من البداية</button>
         ${nextBtn()}`;
+      toTop();
       $('[data-act="again"]', host).addEventListener('click', () => { i = 0; draw(); });
     }
     draw();
@@ -1372,13 +1590,15 @@
           <button class="btn block" type="button" data-act="submit">تحقق</button>`;
       } else {
         const prompt = it.t === 'meaning' ? 'استمع: ماذا يقصد العميل؟' : 'العميل يقول… ماذا ترد؟';
-        const textVisible = it.t === 'respond';
+        // The "show text" toggle shares a line with the prompt so four options fit on small phones.
+        const toggle = it.t !== 'respond' && showText === 'toggle';
         body = `
           <div class="card prompt-card stack">
             <button class="big-play" type="button" data-act="play" aria-label="استمع">${icon('play')}</button>
-            <p class="muted small">${prompt}</p>
-            ${textVisible ? `<p class="say big" lang="en" dir="ltr">${esc(it.text)}</p>`
-              : (showText === 'toggle' ? `<button class="btn ghost small" type="button" data-act="show" style="align-self:center">${icon('eye')} إظهار النص</button><p class="say" lang="en" dir="ltr" id="hiddenText" hidden>${esc(it.text)}</p>` : '')}
+            ${toggle ? `<div class="prompt-row"><p class="muted small">ماذا يقصد العميل؟</p><button class="btn ghost small" type="button" data-act="show">${icon('eye')} إظهار النص</button></div>
+              <p class="say" lang="en" dir="ltr" id="hiddenText" hidden>${esc(it.text)}</p>`
+              : `<p class="muted small">${prompt}</p>`}
+            ${it.t === 'respond' ? `<p class="say big" lang="en" dir="ltr">${esc(it.text)}</p>` : ''}
           </div>
           ${optionButtons(it.options, it.t === 'respond')}`;
       }
@@ -1388,8 +1608,9 @@
           <div class="activity-head">${progressBar(pct(idx, items.length))}<span class="counter num">${idx + 1} / ${items.length}</span></div>
           ${body}
           <div id="qfb"></div>
-          <div id="qnext"></div>
+          <div id="qnext" class="action-bar"></div>
         </div>`;
+      toTop();
       const playBtn = $('[data-act="play"]', host);
       const play = async () => { playBtn.classList.add('playing'); await say(it.text, it.t === 'price' ? 'c' : it.role); if (playBtn.isConnected) playBtn.classList.remove('playing'); };
       playBtn.addEventListener('click', play);
@@ -1426,8 +1647,9 @@
       }
       $('#qfb', host).innerHTML = feedback(ok, ok ? 'صحيح!' : 'ليست هذه الإجابة.', detail);
       $('#qnext', host).innerHTML = `<button class="btn block" type="button" data-act="next">${idx + 1 < items.length ? 'التالي' : 'النتيجة'} ${icon('next')}</button>`;
-      $('[data-act="next"]', host).addEventListener('click', () => { idx++; if (idx < items.length) draw(); else onFinish(results); });
+      $('[data-act="next"]', host).addEventListener('click', () => { idx++; if (idx < items.length) draw(); else { onFinish(results); toTop(); } });
       $('[data-act="next"]', host).focus({ preventScroll: true });
+      showEl($('#qfb', host));
     }
     draw();
   }
@@ -1474,7 +1696,7 @@
           <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
           <span class="gloss">${esc(l.ar)}</span>
         </button>`);
-      built.lastElementChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      showEl(built.lastElementChild);
     };
     async function advance() {
       const custLines = [];
@@ -1490,6 +1712,7 @@
           ${optionButtons(opts, true)}
           <div id="bfb"></div>
         </div>`;
+      showEl($('#choice .card', host));
       $$('#choice .option', host).forEach(b => b.addEventListener('click', () => {
         const i = +b.dataset.opt;
         if (i === correct) {
@@ -1502,6 +1725,7 @@
           b.classList.add('wrong');
           b.disabled = true;
           $('#bfb', host).innerHTML = feedback(false, 'ليست الأنسب هنا. جرّب مرة أخرى.', `تلميح: ${esc(line.ar)}`);
+          showEl($('#bfb', host));
         }
       }));
       if (custLines.length) await playLines(custLines);
@@ -1517,6 +1741,7 @@
           ${nextBtn()}
         </div>`;
       wirePlayAll(host, lines);
+      showEl($('#buildEnd', host));
     }
     advance();
   }
@@ -1540,7 +1765,7 @@
           <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
           <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
         </button>`);
-      log.lastElementChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      showEl(log.lastElementChild);
     };
     async function advance() {
       const turnBox = $('#turn', host);
@@ -1568,6 +1793,7 @@
           <p class="say small muted" lang="en" dir="ltr" id="hint" hidden>${esc(words.slice(0, 2).join(' '))} …</p>
           <div id="rpfb"></div>
         </div>`;
+      showEl($('.card', turnBox));
       $('[data-act="hint"]', turnBox).addEventListener('click', e => { $('#hint', turnBox).hidden = false; e.currentTarget.remove(); });
       $('[data-act="reveal"]', turnBox).addEventListener('click', () => reveal(line, null));
       const mic = $('[data-act="mic"]', turnBox);
@@ -1589,6 +1815,7 @@
           const marked = r.words.map((w, i) => r.marks[i] ? esc(w) : `<mark>${esc(w)}</mark>`).join(' ');
           $('#rpfb', host).innerHTML = feedback(false, r.score >= 0.5 ? 'قريب! حاول مرة أخرى.' : 'حاول مرة أخرى، أو اضغط «تلميح».',
             r.score >= 0.5 ? `<span class="say small" lang="en" dir="ltr" style="display:block">${marked}</span>` : '');
+          showEl($('#rpfb', host));
         }
       } catch (err) {
         btn.classList.remove('listening');
@@ -1609,6 +1836,7 @@
       idx++;
       if (ok) {
         turnBox.innerHTML = feedback(true, 'ممتاز! قلتها بشكل صحيح.');
+        showEl(turnBox);
         await say(line.en, 'k');
         if (host.isConnected) advance();
         return;
@@ -1621,6 +1849,7 @@
             <button class="btn ghost small" type="button" data-act="no">أحتاج تدريبًا</button>
           </div>
         </div>`;
+      showEl(turnBox);
       say(line.en, 'k');
       $('[data-act="yes"]', turnBox).addEventListener('click', () => { said++; advance(); });
       $('[data-act="no"]', turnBox).addEventListener('click', () => advance());
@@ -1634,7 +1863,8 @@
           <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} من البداية</button>
           ${nextBtn()}
         </div>`;
-      $('[data-act="again"]', host).addEventListener('click', () => stepRoleplay({ unit, u, host, nextBtn }));
+      showEl($('#turn', host));
+      $('[data-act="again"]', host).addEventListener('click', () => { toTop(); stepRoleplay({ unit, u, host, nextBtn }); });
     }
     advance();
   }
@@ -1667,6 +1897,7 @@
           <div id="sopts"></div>
           <p class="center muted">النقاط: <span class="num" id="sscore">0</span></p>
         </div>`;
+      toTop();
       const bar = $('.progress > span', host);
       function nextItem() {
         const p = earlier.length && Math.random() < 0.3 ? pick(earlier) : pick(current);
@@ -1708,6 +1939,7 @@
         </div>
         <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} جولة أخرى</button>
         ${nextBtn()}`;
+      toTop();
       $('[data-act="again"]', host).addEventListener('click', run);
     }
     intro();
@@ -1733,11 +1965,17 @@
       if (passed) markStep(u, 'check', score); else save();
       const wrong = results.filter(r => !r.ok);
       const pulse = S.pulses[u] || {};
+      // The next action comes straight after the score: move on after a pass; after a
+      // fail, review the phrases or retake. Mistakes and the optional pulse follow.
       host.innerHTML = `
         <div class="card stack center">
           <p class="muted">نتيجة اختبار الوحدة</p>
           <div class="price-tag">${score}%</div>
           <p class="pill ${passed ? 'good' : 'amber'}">${passed ? 'اجتزت الوحدة!' : `تحتاج ${P.meta.passMark}% لاجتياز الوحدة`}</p>
+        </div>
+        <div class="stack">
+          ${passed ? nextBtn() : `<a class="btn block" href="#/unit/${u}/phrases">${icon('list')} راجع العبارات</a>`}
+          <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} أعد الاختبار</button>
         </div>
         ${wrong.length ? `
         <details class="acc">
@@ -1757,9 +1995,7 @@
           <div class="scale">${[['easy', 'سهلة جدًا'], ['right', 'مناسبة'], ['hard', 'صعبة جدًا']].map(([v, l]) => `<label><input type="radio" name="level" value="${v}" ${pulse.level === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
           <label class="field">تعليق (اختياري)<textarea class="input" id="pComment" rows="2">${esc(pulse.comment || '')}</textarea></label>
           <button class="btn soft" type="button" data-act="pulse">إرسال الرأي</button>
-        </div>
-        <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} أعد الاختبار</button>
-        ${passed ? nextBtn() : `<a class="btn ghost block" href="#/unit/${u}/phrases">راجع العبارات</a>`}`;
+        </div>`;
       $('[data-act="again"]', host).addEventListener('click', start);
       $('[data-act="pulse"]', host).addEventListener('click', e => {
         const useful = $('input[name="useful"]:checked', host);
@@ -1861,6 +2097,7 @@
     function draw() {
       stopAll();
       if (mode === 'listen') drawListen(); else if (mode === 'say') drawSay(); else drawPairs();
+      toTop();
     }
     function drawListen() {
       const amount = randomPrice();
@@ -1883,7 +2120,8 @@
           `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
         $('[data-act="check"]', body).remove();
         $('[data-act="next"]', body).addEventListener('click', draw);
-        $('[data-act="next"]', body).focus();
+        $('[data-act="next"]', body).focus({ preventScroll: true });
+        showEl($('#nFb'));
       };
       $('[data-act="check"]', body).addEventListener('click', check);
       $('#nAns').addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
@@ -1911,7 +2149,7 @@
             <button class="btn ghost small" type="button" data-act="no">أخطأت</button>
           </div>
         </div>`;
-      const reveal = () => { $('#nAnswer').hidden = false; const r = $('[data-act="reveal"]', body); if (r) r.remove(); };
+      const reveal = () => { $('#nAnswer').hidden = false; const r = $('[data-act="reveal"]', body); if (r) r.remove(); showEl($('#nAnswer')); };
       $('[data-act="reveal"]', body).addEventListener('click', reveal);
       $('[data-act="yes"]', body).addEventListener('click', () => { total++; right++; setScore(); draw(); });
       $('[data-act="no"]', body).addEventListener('click', () => { total++; setScore(); draw(); });
@@ -1930,10 +2168,10 @@
           const r = r1.score >= r2.score ? r1 : r2;
           heard.textContent = `سمعت: “${r.heard}”` + (r.score >= 0.8 ? ' ✓' : '');
           if (r.score >= 0.8) {
-            total++; right++; setScore(); reveal();
-            $('[data-act="yes"]', body).parentElement.remove();
-            body.insertAdjacentHTML('beforeend', `<button class="btn block" type="button" data-act="nx">التالي ${icon('next')}</button>`);
+            total++; right++; setScore();
+            $('[data-act="yes"]', body).parentElement.outerHTML = `<button class="btn block" type="button" data-act="nx">التالي ${icon('next')}</button>`;
             $('[data-act="nx"]', body).addEventListener('click', draw);
+            reveal();
           }
         } catch (err) {
           mic.classList.remove('listening');
@@ -1960,6 +2198,7 @@
         $('#nFb').innerHTML = feedback(ok, ok ? 'صحيح!' : `سمعت ${target}`, `<span class="say" lang="en" dir="ltr" style="display:block">${esc(text)}</span>`) +
           `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
         $('[data-act="next"]', body).addEventListener('click', draw);
+        showEl($('#nFb'));
       }));
       say(text, 'c');
     }
@@ -1993,6 +2232,7 @@
           view.innerHTML = `
             <div class="empty" style="color:var(--good)">${icon('award')}<p>أنهيت مراجعة ${total} ${total === 1 ? 'عبارة' : 'عبارات'}. أحسنت!</p></div>
             <a class="btn block" href="#/">الرئيسية</a>`;
+          toTop();
           return;
         }
         const id = queue[0];
@@ -2013,16 +2253,20 @@
               <p class="gloss">${esc(p.kAr)}</p>
               <div class="row" style="justify-content:center">${audioBtns(p.k, 'k')}</div>
             </div>
-            <button class="btn block" type="button" data-act="flip">ماذا تقول؟ أظهر الرد</button>
-            <div id="grades" hidden class="grid-2" style="grid-template-columns:repeat(3,1fr)">
-              <button class="btn ghost" type="button" data-g="0">مرة أخرى</button>
-              <button class="btn ghost" type="button" data-g="1">صعبة</button>
-              <button class="btn" type="button" data-g="2">سهلة</button>
+            <div class="action-bar">
+              <button class="btn block" type="button" data-act="flip">ماذا تقول؟ أظهر الرد</button>
+              <div id="grades" hidden class="grid-2" style="grid-template-columns:repeat(3,1fr)">
+                <button class="btn ghost" type="button" data-g="0">مرة أخرى</button>
+                <button class="btn ghost" type="button" data-g="1">صعبة</button>
+                <button class="btn" type="button" data-g="2">سهلة</button>
+              </div>
             </div>
           </div>`;
+        toTop();
         say(c, 'c');
         $('[data-act="flip"]').addEventListener('click', e => {
           $('#back').hidden = false; $('#grades').hidden = false; e.currentTarget.remove();
+          showEl($('#back'));
           say(p.k, 'k');
         });
         $$('[data-g]').forEach(b => b.addEventListener('click', () => {
@@ -2179,14 +2423,14 @@
     return lines.join('\n');
   }
   function exportData() {
-    const name = (S.profile.name || 'learner').replace(/[^\w؀-ۿ-]+/g, '-');
-    const blob = new Blob([JSON.stringify({ program: P.meta.id, version: P.meta.version, exportedAt: new Date().toISOString(), data: S }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(backupObj(), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${P.meta.id}-${name}-${dayKey()}.json`;
+    a.download = `${backupName()}.json`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    markBackup();
   }
 
   function viewRecord() {
@@ -2219,14 +2463,23 @@
           <button class="btn" type="button" data-act="share">${icon('share')} مشاركة</button>
           <button class="btn ghost" type="button" data-act="print">${icon('print')} طباعة</button>
         </div>
+        <p class="muted small no-print">ترسل «مشاركة» السجل مع ملف فيه تقدّمك إن سمح هاتفك بذلك. احتفظ به أنت ومدربك: إذا ضاع تقدّمك فاستورده من الإعدادات.</p>
         <button class="btn ghost block no-print" type="button" data-act="export">${icon('download')} تنزيل البيانات (JSON)</button>
       </div>`;
     $('[data-act="print"]').addEventListener('click', () => window.print());
     $('[data-act="export"]').addEventListener('click', exportData);
     $('[data-act="share"]').addEventListener('click', async () => {
       const text = recordSummaryText();
+      const title = `${P.meta.title.en} — Learning record`;
       try {
-        if (navigator.share) { await navigator.share({ title: `${P.meta.title.en} — Learning record`, text }); return; }
+        if (navigator.share) {
+          // Attach the data as a backup the trainer can keep, where the phone can share files.
+          const file = backupFile();
+          const withFile = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+          await navigator.share(withFile ? { title, text, files: [file] } : { title, text });
+          if (withFile) markBackup();
+          return;
+        }
       } catch (e) { if (e && e.name === 'AbortError') return; }
       try { await navigator.clipboard.writeText(text); toast('نُسخ السجل. الصقه في رسالة إلى المدرب.'); }
       catch (e) { toast('تعذّرت المشاركة'); }
@@ -2336,21 +2589,19 @@
           <h3>المظهر</h3>
           ${seg('theme', [['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'داكن']], st.theme)}
         </div>
-        <a class="card unit-card" href="#/trainer">
-          <span class="unit-badge">${icon('users')}</span>
-          <span class="grow"><strong>للمدربين وفريق البرنامج</strong><br><span class="muted small">تصميم البرنامج، مصفوفة المواءمة، أدلة الورش، تقييم لعب الأدوار</span></span>
-          <span class="chev">${icon('next')}</span>
-        </a>
         <div class="card stack">
           <h3>البيانات</h3>
           <p class="muted small">تُحفظ بياناتك على هذا الجهاز فقط. صدّرها لإرسالها إلى المدرب أو لنقلها إلى جهاز آخر.</p>
           <div class="grid-2">
             <button class="btn ghost" type="button" data-act="export">${icon('download')} تصدير</button>
-            <label class="btn ghost" style="cursor:pointer">${icon('upload')} استيراد<input type="file" accept="application/json,.json" id="sImport" hidden></label>
+            <label class="btn ghost" style="cursor:pointer">${icon('upload')} استيراد<input type="file" accept="application/json,.json,text/plain,.txt" id="sImport" hidden></label>
           </div>
           <button class="btn danger" type="button" data-act="reset">${icon('trash')} مسح كل البيانات</button>
         </div>
-        <p class="center muted small">${esc(P.meta.title.en)} v${esc(P.meta.version)}</p>
+        <div class="center stack" style="gap:0">
+          <a class="link-btn" href="#/trainer" style="align-self:center">${icon('lock', 'inline-ico')} للمدربين</a>
+          <p class="muted small">${esc(P.meta.title.en)} v${esc(P.meta.version)}</p>
+        </div>
       </div>`;
     const saveProfile = () => {
       S.profile.name = $('#sName').value.trim().slice(0, 60);
@@ -2374,16 +2625,8 @@
       if (!f) return;
       const r = new FileReader();
       r.onload = () => {
-        try {
-          const obj = JSON.parse(r.result);
-          const data = isObj(obj) && isObj(obj.data) && obj.data.v === 2 ? obj.data : isObj(obj) && obj.v === 2 ? obj : null;
-          if (!data) throw new Error('format');
-          if (!confirm('سيستبدل هذا بياناتك الحالية. هل تريد المتابعة؟')) return;
-          S = sanitize(data);
-          save(); applySettings();
-          toast('تم الاستيراد');
-          render();
-        } catch (err) { toast('الملف غير صالح'); }
+        const data = readBackup(r.result);
+        if (data) restoreBackup(data, 'تم الاستيراد'); else toast('الملف غير صالح');
       };
       r.readAsText(f);
       e.target.value = '';
@@ -2406,6 +2649,27 @@
   const ltr = (s, cls = '') => `<span class="ltr ${cls}" lang="en" dir="ltr">${esc(s)}</span>`;
   const biBlock = o => `<div class="stack" style="gap:2px">${ltr(o.en)}<span class="gloss small" dir="rtl" lang="ar">${rich(o.ar)}</span></div>`;
 
+  const trainerOpen = () => !P.meta.trainerCode || S.trainer.unlocked === true;
+  function viewTrainerCode() {
+    setBar('للمدربين', 'Trainers and program team');
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="card stack">
+          <div class="row"><span class="unit-badge">${icon('lock')}</span><h2 class="grow" style="margin:0;font-size:1.05rem">صفحات المدربين</h2></div>
+          <p class="small">فيها مواقف التقييم الختامي، لذلك تُفتح برمز يعطيه فريق البرنامج للمدربين.</p>
+          <label class="field">رمز المدرب<input class="input num" id="tCode" inputmode="numeric" autocomplete="off" dir="ltr"></label>
+          <button class="btn" type="button" data-act="unlock">فتح</button>
+        </div>
+        <a class="btn ghost block" href="#/">الرجوع إلى الرئيسية</a>
+      </div>`;
+    const tryCode = () => {
+      if ($('#tCode').value.trim() === String(P.meta.trainerCode)) { S.trainer.unlocked = true; save(); render(); }
+      else { toast('الرمز غير صحيح'); $('#tCode').select(); }
+    };
+    $('[data-act="unlock"]').addEventListener('click', tryCode);
+    $('#tCode').addEventListener('keydown', e => { if (e.key === 'Enter') tryCode(); });
+  }
+
   function viewTrainer() {
     setBar('للمدربين', 'Trainers and program team');
     const tile = (href, ic, title, sub) => `
@@ -2423,7 +2687,10 @@
         ${tile('#/trainer/rate', 'pen', 'تقييم لعب الأدوار · Rate a role-play', 'مقيّمان، أربعة معايير، وحساب الاتفاق')}
         ${tile('#/trainer/ratings', 'chart', 'النتائج والاتفاق · Ratings and agreement', `${S.trainer.ratings.length} تقييم محفوظ على هذا الجهاز`)}
         ${tile('#/trainer/align', 'clipboard', 'فحص المواءمة · Alignment check', 'مراجعان يربطان التقييم الختامي بالمخرجات قبل التجربة')}
+        ${P.meta.trainerCode ? `<button class="btn ghost block" type="button" data-act="lock">${icon('lock')} أغلق صفحات المدربين على هذا الجهاز</button>` : ''}
       </div>`;
+    const lock = $('[data-act="lock"]');
+    if (lock) lock.addEventListener('click', () => { S.trainer.unlocked = false; save(); go('#/settings'); });
   }
 
   function viewDesign() {
@@ -2868,6 +3135,7 @@
     $('#helpBtn').addEventListener('click', openHelp);
     applySettings();
     if (!S.profile.startedAt) { S.profile.startedAt = dayKey(); save(); }
+    if (hasProgress()) keepStorage();
     window.addEventListener('hashchange', render);
     render();
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

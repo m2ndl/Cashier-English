@@ -83,7 +83,12 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Keep focused and scrolled-to elements clear of the sticky app bar and the fixed tab bar. */
+  scroll-padding-top: calc(var(--bar-h) + env(safe-area-inset-top, 0px) + 8px);
+  scroll-padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 8px);
+}
 body {
   margin: 0;
   background: var(--bg);
@@ -143,6 +148,9 @@ main#view {
   max-width: 600px; margin: 0 auto;
   padding: 16px 16px calc(var(--nav-h) + 28px + env(safe-area-inset-bottom, 0px));
 }
+/* The app moves focus to the main region after each navigation for screen readers;
+   it is not a control, so it needs no focus ring. */
+main#view:focus { outline: none; }
 
 .tab-bar {
   position: fixed; inset-inline: 0; bottom: 0; z-index: 20;
@@ -346,16 +354,17 @@ mark { background: var(--amber-soft); color: var(--amber); border-radius: 4px; p
 .activity-head .progress { flex: 1; }
 .counter { font-size: .85rem; color: var(--ink-3); white-space: nowrap; direction: ltr; unicode-bidi: isolate; }
 
-.prompt-card { text-align: center; padding: 24px 16px; }
+.prompt-card { text-align: center; padding: 16px; }
 .prompt-card .say { text-align: center; }
+.prompt-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; }
 .big-play {
-  width: 84px; height: 84px; margin: 6px auto 10px;
+  width: 72px; height: 72px; margin: 2px auto 4px;
   border-radius: 50%; border: 0;
   background: var(--brand); color: var(--brand-ink);
   display: grid; place-items: center;
   box-shadow: 0 6px 18px rgba(15, 110, 102, .35);
 }
-.big-play svg { width: 38px; height: 38px; }
+.big-play svg { width: 34px; height: 34px; }
 .big-play.playing { animation: pulse 1s ease-in-out infinite; }
 .big-play[disabled] { opacity: .4; cursor: default; }
 .shake { animation: shake .35s ease; }
@@ -365,7 +374,7 @@ mark { background: var(--amber-soft); color: var(--amber); border-radius: 4px; p
 .options { display: flex; flex-direction: column; gap: 10px; }
 .option {
   width: 100%; text-align: start;
-  padding: 14px 16px; min-height: 54px;
+  padding: 12px 16px; min-height: 50px;
   border-radius: 12px; border: 1.5px solid var(--line);
   background: var(--surface);
   display: flex; align-items: center; gap: 10px;
@@ -635,3 +644,19 @@ table.rubric td, table.rubric th { min-width: 7rem; }
 .voice-warn { display: flex; flex-direction: column; gap: 10px; }
 .voice-warn p { margin: 0; }
 .voice-warn ol { margin: 4px 0 0; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 4px; }
+
+/* An activity's main buttons stay in reach just above the tab bar while the page scrolls. */
+.action-bar {
+  position: sticky; z-index: 5;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  margin-inline: -16px; padding: 12px 16px 10px;
+  background: linear-gradient(to bottom, transparent, var(--bg) 12px);
+}
+.action-bar:empty { display: none; }
+.action-bar > * + * { margin-top: 10px; }
+.steps-list { margin: 0; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 6px; }
+.steps-list .btn { vertical-align: middle; }
+.link-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 12px;
+  color: var(--ink-3); font-size: .85rem; text-decoration: underline; text-underline-offset: 3px;
+}
