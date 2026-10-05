@@ -463,14 +463,15 @@
     // Devices often list their oldest, most robotic voices first: Windows' desktop voices
     // (Microsoft David) ahead of Google's, and Apple's novelty voices (Albert, Fred, Grandpa)
     // ahead of Samantha or Daniel. So voices are ranked by quality rather than taken in order.
-    const ROBOTIC = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|eddy|flo|fred|good news|grandma|grandpa|hysterical|jester|junior|kathy|organ|pipe organ|ralph|reed|rocko|sandy|shelley|superstar|trinoids|whisper|wobble|zarvox)\b|espeak|^microsoft (ana|maisie)\b/i; // Ana, Maisie: child voices
+    // Apple names are matched from the start, so other platforms' voices ("Microsoft …",
+    // "Google …") never collide with them.
+    const ROBOTIC = /^(agnes|albert|bad news|bahh|bells|boing|bruce|bubbles|cellos|deranged|eddy|flo|fred|good news|grandma|grandpa|hysterical|jester|junior|kathy|organ|pipe organ|princess|ralph|reed|rocko|sandy|shelley|superstar|trinoids|vicki|victoria|whisper|wobble|zarvox)\b|espeak|^microsoft (ana|maisie)\b/i; // Ana, Maisie: child voices
     function score(v) {
       const n = v.name || '';
       if (ROBOTIC.test(n)) return -10;
-      let s = v.localService ? 0.5 : 0; // works offline
+      let s = v.localService ? 0.5 : 0; // starts at once and works offline
       if (/natural|neural|premium|enhanced/i.test(n)) s += 4;
-      else if (/^google\b/i.test(n)) s += 2;
-      else if (/^microsoft\b/i.test(n)) s -= 2; // Windows desktop voices
+      else if (/^microsoft\b/i.test(n)) s -= /^microsoft david\b/i.test(n) ? 3 : 2; // Windows desktop voices; David is the oldest
       return s;
     }
     const good = v => score(v) >= 0;
@@ -488,6 +489,7 @@
     }
     // The voices of one accent, best first.
     const ranked = (list, prefix) => list.filter(v => loc(v).startsWith(prefix)).sort((a, b) => score(b) - score(a));
+    let scene = null; // the conversation on screen, if any
     const CUSTOMER_ACCENTS = ['en-in', 'en-gb', 'en-au', 'en-us', 'en-ie', 'en-za', 'en-ph', 'en-ng', 'en-ca', 'en-nz', 'en-sg'];
     function voiceFor(role, text) {
       const list = usable();
@@ -495,10 +497,13 @@
       const acc = S.settings.accent;
       const order = acc === 'gb' ? ['en-gb', 'en-us'] : ['en-us', 'en-gb'];
       // The learner's own lines: one voice, the best of the chosen accent.
+      // A good voice of another accent beats a robotic voice of the chosen one.
       const tops = order.map(p => ranked(list, p)[0]).filter(Boolean);
-      const own = tops.find(good) || tops[0] || list.slice().sort((a, b) => score(b) - score(a))[0];
+      const best = list.slice().sort((a, b) => score(b) - score(a))[0];
+      const own = tops.find(good) || (good(best) ? best : tops[0] || best);
       if (role !== 'c') return own;
-      // Customers: a spread of accents and voices, each line always in the same voice.
+      // Customers: a spread of accents and voices, each line always in the same voice, and
+      // one customer keeps one voice for a whole conversation (the scene).
       // The best voices the device has, and not the learner's voice when there is a choice.
       let groups = (acc === 'mix' ? CUSTOMER_ACCENTS : order).map(p => ranked(list, p)).filter(g => g.length);
       if (acc !== 'mix') groups = groups.slice(0, 1);
@@ -507,31 +512,41 @@
         if (g.length) groups = g;
       }
       if (!groups.length) return own;
-      const h = hash(text), g = groups[h % groups.length];
+      // An accent with no good voice keeps only its least robotic ones.
+      groups = groups.map(g => g.some(good) ? g : g.filter(v => score(v) > score(g[0]) - 1));
+      const h = hash(scene || text), g = groups[h % groups.length];
       return g[Math.floor(h / groups.length) % g.length];
     }
+    // Errors that point at the voice itself. Others (blocked without a tap, audio busy) are no
+    // reason to drop a voice.
+    const VOICE_ERROR = /network|synthesis-failed|synthesis-unavailable|voice-unavailable|language-unavailable/;
+    const activated = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
+    let gen = 0; // bumped by every new line and by stop(), so an old line never comes back
     function speak(text, opts = {}) {
+      const my = ++gen;
       return new Promise(resolve => {
         if (!ok || !text) { resolve(false); return; }
         const busy = speechSynthesis.speaking || speechSynthesis.pending;
         if (busy) speechSynthesis.cancel();
         const start = retry => {
+          if (my !== gen) { resolve(null); return; }
           const u = new SpeechSynthesisUtterance(text);
           const v = voiceFor(opts.role || 'k', text);
           if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
           u.rate = clamp((S.settings.rate || 1) * (opts.slow ? 0.7 : 1), 0.5, 1.5);
-          let done = false;
+          let done = false, started = false;
           const fin = r => { if (done) return; done = true; clearInterval(keepAlive); resolve(r); };
-          u.onstart = () => { heard = true; };
+          u.onstart = () => { started = heard = true; };
           u.onend = () => { heard = true; fin(true); };
           u.onerror = e => {
+            const err = (e && e.error) || '';
             // Cancelled by the next tap: not a failure (null).
-            if (e && /interrupted|canceled/.test(e.error)) { fin(null); return; }
-            // A voice that fails is set aside (an online voice: all online voices, since the
-            // connection is the likely cause), and the line is tried once more with the next best.
-            if (v && !retry && !done) {
+            if (/interrupted|canceled/.test(err) || my !== gen) { fin(null); return; }
+            // The voice failed: set it aside (an online voice: all online voices, since the
+            // connection is the likely cause) and try the line once more with the next best.
+            if (v && !retry && !done && VOICE_ERROR.test(err)) {
               if (v.localService) failed.add(id(v)); else onlineFailed();
-              done = true; clearInterval(keepAlive); start(true); return;
+              done = true; clearInterval(keepAlive); setTimeout(() => start(true), 80); return;
             }
             fin(false);
           };
@@ -539,22 +554,25 @@
           speechSynthesis.resume();
           speechSynthesis.speak(u);
           clearInterval(keepAlive);
-          let started = false;
           keepAlive = setInterval(() => {
             if (speechSynthesis.speaking) { started = heard = true; speechSynthesis.resume(); }
             else if (!speechSynthesis.pending && started) fin(true);
           }, 500);
           setTimeout(() => {
-            if (!done && !started && v && !v.localService) onlineFailed(); // never started: likely no connection
-            fin(false);
+            // An online voice that never started, after the learner has tapped (so the browser
+            // was not just blocking sound): most likely no connection.
+            if (!done && !started && my === gen && v && !v.localService && activated()) onlineFailed();
+            fin(my === gen ? false : null); // a line replaced by a newer one has not failed
           }, 4000 + (text.length * 160) / u.rate);
         };
         if (busy) setTimeout(() => start(false), 80); else start(false);
       });
     }
-    function stop() { if (ok) { speechSynthesis.cancel(); clearInterval(keepAlive); } }
+    function stop() { gen++; if (ok) { speechSynthesis.cancel(); clearInterval(keepAlive); } }
     return {
       ok, speak, stop,
+      // Set by a conversation's screen so its customer keeps one voice; cleared on navigation.
+      scene: k => { scene = k || null; },
       voiceCount: () => voices.length,
       ownVoice: () => (voiceFor('k', '') || {}).name || '',
       locales: () => uniq(voices.map(loc)),
@@ -1193,6 +1211,7 @@
       return;
     }
     stopAll();
+    TTS.scene(null);
     cleanups.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
     cleanups = [];
     if (closeSheet) closeSheet(false);
@@ -1642,6 +1661,7 @@
 
   function stepModel({ unit, u, host, nextBtn }) {
     const m = unit.model;
+    TTS.scene(u + ':model');
     // One line from each stage of the conversation, in the order they were said.
     const picks = uniq(m.lines.map(l => l.st).filter(Boolean)).map(st => m.lines.find(l => l.st === st));
     let shuffled = shuffle(picks);
@@ -1878,6 +1898,7 @@
   // Joint construction: choose each of your turns, with support.
   function stepBuild({ unit, u, host, nextBtn }) {
     const lines = unit.roleplay.lines;
+    TTS.scene(u + ':roleplay');
     let idx = 0, mistakes = 0, turns = 0;
     host.innerHTML = `
       <div class="card stack">
@@ -1950,6 +1971,7 @@
   // Independent construction: say your turns with only an Arabic cue.
   function stepRoleplay({ unit, u, host, nextBtn }) {
     const lines = unit.roleplay.lines;
+    TTS.scene(u + ':roleplay');
     const kTurns = lines.filter(l => l.s === 'k').length;
     let idx = 0, said = 0, micDisabled = false;
     host.innerHTML = `
@@ -2505,6 +2527,7 @@
     const unit = unitById(u);
     const d = unit && (which === 'model' ? unit.model : which === 'roleplay' ? unit.roleplay : null);
     if (!d) { redirect('#/dialogues'); return; }
+    TTS.scene(u + ':' + which);
     setBar(d.title.ar, `الوحدة ${unitIndex(u) + 1} · ${d.setting.ar}`);
     let hideK = false;
     function draw() {
@@ -2851,6 +2874,7 @@
       S.settings[k] = k === 'rate' ? +b.dataset.v : b.dataset.v;
       save(); applySettings();
       $$(`[data-set="${k}"]`).forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      if (k === 'accent') { const el = $('#voiceStatus'); if (el) el.innerHTML = voiceStatusHtml(); }
     }));
     $('[data-act="export"]').addEventListener('click', exportData);
     $('#sImport').addEventListener('change', e => {

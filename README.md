@@ -101,7 +101,13 @@ Browser storage can be lost, so the app protects it in four ways:
 
 ## Browser notes
 
-- **Voices:** speech uses the voices available on the device, ranked by quality. Natural, enhanced and Google voices come first. Robotic voices, such as Apple's novelty voices (Albert, Fred) and the older Windows voices (Microsoft David), are used only when nothing better is available. The learner's lines use one voice, the best one for the chosen accent. The "mixed accents" setting gives customers a spread of the device's good voices, such as Indian, British, Australian and US, and avoids the learner's voice when it can. If an online voice fails, for example with no connection, the app switches to the device's offline voices. **Settings** names the voice in use.
+- **Voices:** speech uses the voices available on the device, ranked by quality:
+  - Natural and enhanced voices come first, then other good voices, with the device's own voices ahead of online ones.
+  - Robotic voices are used only when nothing better is available. These include Apple's novelty voices (Albert, Fred) and the older Windows voices (Microsoft David).
+  - The learner's lines use one voice: the best one for the chosen accent.
+  - With the "mixed accents" setting, customers get a spread of the device's good voices, such as Indian, British, Australian and US, and avoid the learner's voice when they can. In a conversation, the customer keeps one voice from start to finish.
+  - If an online voice fails, for example with no connection, the app switches to the device's offline voices.
+  - **Settings** names the voice in use.
 - **No English voice:** if the device lists voices but none is English, or audio fails to start, the app explains how to install an English voice (Android and iPhone steps). **Settings** shows the same status.
 - **Microphone practice:** this is optional. It uses the browser's speech recognition, which Chrome and Safari provide. In Chrome it needs an internet connection.
 
