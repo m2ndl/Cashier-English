@@ -460,28 +460,62 @@
       else speechSynthesis.onvoiceschanged = refresh;
       setTimeout(() => { if (!loaded) { loaded = true; changed(); } }, 2000);
     }
-    function byLocale(prefix) {
-      const list = voices.filter(v => loc(v).startsWith(prefix));
-      return list.find(v => v.localService) || list[0] || null;
+    // Devices often list their oldest, most robotic voices first: Windows' desktop voices
+    // (Microsoft David) ahead of Google's, and Apple's novelty voices (Albert, Fred, Grandpa)
+    // ahead of Samantha or Daniel. So voices are ranked by quality rather than taken in order.
+    const ROBOTIC = /^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|eddy|flo|fred|good news|grandma|grandpa|hysterical|jester|junior|kathy|organ|pipe organ|ralph|reed|rocko|sandy|shelley|superstar|trinoids|whisper|wobble|zarvox)\b|espeak|^microsoft (ana|maisie)\b/i; // Ana, Maisie: child voices
+    function score(v) {
+      const n = v.name || '';
+      if (ROBOTIC.test(n)) return -10;
+      let s = v.localService ? 0.5 : 0; // works offline
+      if (/natural|neural|premium|enhanced/i.test(n)) s += 4;
+      else if (/^google\b/i.test(n)) s += 2;
+      else if (/^microsoft\b/i.test(n)) s -= 2; // Windows desktop voices
+      return s;
     }
+    const good = v => score(v) >= 0;
+    const id = v => v.voiceURI || v.name;
+    const failed = new Set(); // voices that failed this session
+    // An online voice failed: use the device's own voices for a few minutes, or until reconnected.
+    let onlineFailedAt = 0;
+    const onlineFailed = () => { onlineFailedAt = Date.now(); };
+    window.addEventListener('online', () => { onlineFailedAt = 0; });
+    function usable() {
+      const list = voices.filter(v => !failed.has(id(v)));
+      const offline = navigator.onLine === false || Date.now() - onlineFailedAt < 5 * 60000;
+      const local = offline ? list.filter(v => v.localService) : list;
+      return local.length ? local : list;
+    }
+    // The voices of one accent, best first.
+    const ranked = (list, prefix) => list.filter(v => loc(v).startsWith(prefix)).sort((a, b) => score(b) - score(a));
     const CUSTOMER_ACCENTS = ['en-in', 'en-gb', 'en-au', 'en-us', 'en-ie', 'en-za', 'en-ph', 'en-ng', 'en-ca', 'en-nz', 'en-sg'];
     function voiceFor(role, text) {
-      if (!voices.length) return null;
+      const list = usable();
+      if (!list.length) return null;
       const acc = S.settings.accent;
-      if (role === 'c' && acc === 'mix') {
-        const avail = CUSTOMER_ACCENTS.filter(p => voices.some(v => loc(v).startsWith(p)));
-        if (avail.length) return byLocale(avail[hash(text) % avail.length]);
-      }
       const order = acc === 'gb' ? ['en-gb', 'en-us'] : ['en-us', 'en-gb'];
-      for (const p of order) { const v = byLocale(p); if (v) return v; }
-      return voices[0];
+      // The learner's own lines: one voice, the best of the chosen accent.
+      const tops = order.map(p => ranked(list, p)[0]).filter(Boolean);
+      const own = tops.find(good) || tops[0] || list.slice().sort((a, b) => score(b) - score(a))[0];
+      if (role !== 'c') return own;
+      // Customers: a spread of accents and voices, each line always in the same voice.
+      // The best voices the device has, and not the learner's voice when there is a choice.
+      let groups = (acc === 'mix' ? CUSTOMER_ACCENTS : order).map(p => ranked(list, p)).filter(g => g.length);
+      if (acc !== 'mix') groups = groups.slice(0, 1);
+      for (const keep of [v => score(v) > -10, good, v => v !== own]) {
+        const g = groups.map(x => x.filter(keep)).filter(x => x.length);
+        if (g.length) groups = g;
+      }
+      if (!groups.length) return own;
+      const h = hash(text), g = groups[h % groups.length];
+      return g[Math.floor(h / groups.length) % g.length];
     }
     function speak(text, opts = {}) {
       return new Promise(resolve => {
         if (!ok || !text) { resolve(false); return; }
         const busy = speechSynthesis.speaking || speechSynthesis.pending;
         if (busy) speechSynthesis.cancel();
-        const start = () => {
+        const start = retry => {
           const u = new SpeechSynthesisUtterance(text);
           const v = voiceFor(opts.role || 'k', text);
           if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
@@ -490,8 +524,17 @@
           const fin = r => { if (done) return; done = true; clearInterval(keepAlive); resolve(r); };
           u.onstart = () => { heard = true; };
           u.onend = () => { heard = true; fin(true); };
-          // Cancelled by the next tap: not a failure (null).
-          u.onerror = e => fin(e && /interrupted|canceled/.test(e.error) ? null : false);
+          u.onerror = e => {
+            // Cancelled by the next tap: not a failure (null).
+            if (e && /interrupted|canceled/.test(e.error)) { fin(null); return; }
+            // A voice that fails is set aside (an online voice: all online voices, since the
+            // connection is the likely cause), and the line is tried once more with the next best.
+            if (v && !retry && !done) {
+              if (v.localService) failed.add(id(v)); else onlineFailed();
+              done = true; clearInterval(keepAlive); start(true); return;
+            }
+            fin(false);
+          };
           current = u;
           speechSynthesis.resume();
           speechSynthesis.speak(u);
@@ -501,15 +544,19 @@
             if (speechSynthesis.speaking) { started = heard = true; speechSynthesis.resume(); }
             else if (!speechSynthesis.pending && started) fin(true);
           }, 500);
-          setTimeout(() => fin(false), 4000 + (text.length * 160) / u.rate);
+          setTimeout(() => {
+            if (!done && !started && v && !v.localService) onlineFailed(); // never started: likely no connection
+            fin(false);
+          }, 4000 + (text.length * 160) / u.rate);
         };
-        if (busy) setTimeout(start, 80); else start();
+        if (busy) setTimeout(() => start(false), 80); else start(false);
       });
     }
     function stop() { if (ok) { speechSynthesis.cancel(); clearInterval(keepAlive); } }
     return {
       ok, speak, stop,
       voiceCount: () => voices.length,
+      ownVoice: () => (voiceFor('k', '') || {}).name || '',
       locales: () => uniq(voices.map(loc)),
       // The device lists voices but none is English: English is read by another language's
       // voice, or not at all.
@@ -540,7 +587,7 @@
   const voiceStatusHtml = () =>
     !TTS.ok ? `<div class="note voice-warn"><strong>الصوت غير مدعوم في هذا المتصفح</strong><p class="small">افتح التطبيق في ${enSpan('Chrome')} أو ${enSpan('Safari')}.</p></div>`
     : TTS.noEnglish() ? `<div class="note">${voiceFixHtml()}</div>`
-    : TTS.voiceCount() ? `<p class="small">${icon('check', 'inline-ico')} الأصوات الإنجليزية في جهازك: <span class="num">${TTS.voiceCount()}</span></p>`
+    : TTS.voiceCount() ? `<p class="small">${icon('check', 'inline-ico')} الأصوات الإنجليزية في جهازك: <span class="num">${TTS.voiceCount()}</span>${TTS.ownVoice() ? ` · صوتك: ${enSpan(TTS.ownVoice())}` : ''}</p>`
     : TTS.unknown() ? `<details class="acc"><summary>اضغط «جرّب الصوت». لم تسمع شيئًا؟ <span class="chev">${icon('down')}</span></summary><div class="acc-body">${voiceFixHtml()}</div></details>`
     : '<p class="muted small">جارٍ البحث عن الأصوات…</p>';
   // Settings shows the voice status; voices can arrive after the page is drawn.
