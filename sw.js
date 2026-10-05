@@ -1,5 +1,5 @@
 /* Offline support: cache the app shell, refresh it in the background. */
-const CACHE = 'retail-english-2.5.0';
+const CACHE = 'retail-english-2.6.0';
 const ASSETS = [
   './',
   './index.html',
