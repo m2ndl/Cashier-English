@@ -1258,7 +1258,7 @@
       cards += card(`#/unit/${nx.unit.id}/${nx.step.id}`, nx.unit.icon, `أو ابدأ الوحدة ${unitIndex(nx.unit.id) + 1} مباشرة`, `${esc(nx.step.ar)} — ${esc(nx.unit.title.ar)}`);
     }
     if (!installFirst) cards += install;
-    if (due) cards += card('#/review', 'cards', `مراجعة اليوم: ${countAr(due, W.phrase)}`, 'التكرار المتباعد يثبّت العبارات في الذاكرة', 't-violet');
+    if (due) cards += card('#/review', 'cards', `مراجعة اليوم: ${countAr(due, W.phrase)}`, 'التكرار المتباعد يثبّت العبارات في الذاكرة', 't-blue');
     if (missionDue) cards += card(`#/unit/${weekUnit.id}/mission`, 'briefcase', 'مهمة هذا الأسبوع في العمل', esc(weekUnit.mission.short || preview(weekUnit.mission.ar, 90)), 't-amber');
     if (!S.lc.entry && started) cards += entryCard;
     if (backupDue()) cards += card('#/record', 'share', 'أرسل سجلّك إلى المدرب', 'مرة كل أسبوع: يرى مدربك تقدّمك، وتبقى عنده نسخة منه إن ضاع هاتفك.');
@@ -1427,7 +1427,7 @@
             <a class="card unit-card ${now ? 'current' : ''}" href="#/unit/${u.id}">
               <span class="unit-badge ${done ? 'done' : ''}">${done ? icon('check') : icon(u.icon)}</span>
               <span class="grow stack" style="gap:4px">
-                <span class="unit-meta"><span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}</span>${now ? '<span class="pill brand">هذا الأسبوع</span>' : ''}</span>
+                <span class="unit-meta"><span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}</span>${now ? '<span class="pill tag">هذا الأسبوع</span>' : ''}</span>
                 <strong>${esc(u.title.ar)}</strong>
                 ${progressBar(pct(unitStepsDone(u.id), STEPS.length), `تقدّم الوحدة ${i + 1}`)}
                 <span class="muted small">${unitStepsDone(u.id)}/${STEPS.length} خطوات${best != null ? ` · اختبار الوحدة ${best}%` : ''}</span>
@@ -2221,7 +2221,7 @@
       </a>`;
     view.innerHTML = `
       <div class="stack">
-        ${tile('#/review', 'cards', `المراجعة اليومية${due ? ` <span class="pill violet">${countAr(due, W.phrase)}</span>` : ''}`, 'العبارات التي تعلمتها، في الوقت المناسب لتثبيتها', 't-violet')}
+        ${tile('#/review', 'cards', `المراجعة اليومية${due ? ` <span class="pill blue">${countAr(due, W.phrase)}</span>` : ''}`, 'العبارات التي تعلمتها، في الوقت المناسب لتثبيتها', 't-blue')}
         ${tile('#/numbers', 'hash', 'الأرقام والأسعار', 'استمع واكتب، اقرأ وقل، و13 أم 30؟', 't-good')}
         ${tile('#/dialogues', 'chat', 'الحوارات', 'كل حوارات الوحدات، مع إخفاء دورك للتدريب')}
         ${tile('#/watch', 'alert', 'انتبه!', 'كلمات خادعة وأرقام متشابهة', 't-amber')}
