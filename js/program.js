@@ -23,7 +23,7 @@
 window.PROGRAM = {
   meta: {
     id: "retail-english",
-    version: "2.6.0",
+    version: "2.6.1",
     title: { en: "Retail English" },
     subtitle: {
       en: "English for retail sales associates",
