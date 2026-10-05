@@ -105,7 +105,8 @@
     copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5A1.5 1.5 0 0 0 14 3.5H5A1.5 1.5 0 0 0 3.5 5v9A1.5 1.5 0 0 0 5 15.5h3.5"/>',
     expand: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>'
   };
-  const icon = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[name] || IC.info}</svg>`;
+  // The size attributes are a fallback: CSS sizes each icon where it is used.
+  const icon = (name, cls = '') => `<svg class="${cls}" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[name] || IC.info}</svg>`;
 
   // =====================================================================
   // Content lookups
@@ -783,6 +784,8 @@
     `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}">${icon('volume')}استمع</button>` +
     (slow ? `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}" data-slow="1">${icon('slow')}ببطء</button>` : '');
   const ploChips = ids => ids.map(id => `<span class="pill brand" title="${esc(PLO[id] ? PLO[id].en : id)}">${esc(id)}</span>`).join(' ');
+  // A score as a ring that fills to v percent; the text inside is what is read out.
+  const scoreRing = (v, text, tone = '') => `<div class="ring ${tone}" style="--p:${v}"><span class="v" dir="ltr">${esc(text)}</span></div>`;
   const progressBar = (v, label = 'التقدّم') => `<div class="progress" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><span style="width:${v}%"></span></div>`;
   // A table that may scroll sideways: reachable and named for keyboard and screen-reader users.
   const scrollBox = label => `<div class="table-scroll" tabindex="0" role="region" aria-label="${esc(label)}">`;
@@ -1229,9 +1232,9 @@
     const allPassed = passed === UNITS.length;
     const goal = P.meta.dailyMinutes || 20;
     const today = Math.round((S.time[dayKey()] || 0) / 60);
-    const card = (href, ic, title, sub) => `
+    const card = (href, ic, title, sub, tint = '') => `
         <a class="card unit-card" href="${href}">
-          <span class="unit-badge">${icon(ic)}</span>
+          <span class="unit-badge ${tint}">${icon(ic)}</span>
           <span class="grow"><strong>${title}</strong><br><span class="muted small">${sub}</span></span>
           <span class="chev">${icon('next')}</span>
         </a>`;
@@ -1252,11 +1255,11 @@
     let cards = installFirst ? install : '';
     // A new learner's button opens the listening check; the first lesson is offered next to it.
     if (nx && !started && next && next.href === '#/lc/entry') {
-      cards += card(`#/unit/${nx.unit.id}/${nx.step.id}`, nx.step.icon, `أو ابدأ الوحدة ${unitIndex(nx.unit.id) + 1} مباشرة`, `${esc(nx.step.ar)} — ${esc(nx.unit.title.ar)}`);
+      cards += card(`#/unit/${nx.unit.id}/${nx.step.id}`, nx.unit.icon, `أو ابدأ الوحدة ${unitIndex(nx.unit.id) + 1} مباشرة`, `${esc(nx.step.ar)} — ${esc(nx.unit.title.ar)}`);
     }
     if (!installFirst) cards += install;
-    if (due) cards += card('#/review', 'cards', `مراجعة اليوم: ${countAr(due, W.phrase)}`, 'التكرار المتباعد يثبّت العبارات في الذاكرة');
-    if (missionDue) cards += card(`#/unit/${weekUnit.id}/mission`, 'briefcase', 'مهمة هذا الأسبوع في العمل', esc(weekUnit.mission.short || preview(weekUnit.mission.ar, 90)));
+    if (due) cards += card('#/review', 'cards', `مراجعة اليوم: ${countAr(due, W.phrase)}`, 'التكرار المتباعد يثبّت العبارات في الذاكرة', 't-violet');
+    if (missionDue) cards += card(`#/unit/${weekUnit.id}/mission`, 'briefcase', 'مهمة هذا الأسبوع في العمل', esc(weekUnit.mission.short || preview(weekUnit.mission.ar, 90)), 't-amber');
     if (!S.lc.entry && started) cards += entryCard;
     if (backupDue()) cards += card('#/record', 'share', 'أرسل سجلّك إلى المدرب', 'مرة كل أسبوع: يرى مدربك تقدّمك، وتبقى عنده نسخة منه إن ضاع هاتفك.');
     if (isIOS && installed() && !hasProgress()) cards += moveCardHtml();
@@ -1287,7 +1290,7 @@
           ${next ? `<a class="btn hero-btn" href="${next.href}">${esc(next.label)} ${icon('next')}</a>
           <p class="small hero-sub">${esc(next.sub)}</p>` : ''}
         </section>
-        <div class="stack">${cards || `<div class="card">${icon('check')}<p>لا شيء مطلوب الآن. أحسنت!</p></div>`}</div>
+        <div class="stack">${cards || `<div class="card empty">${icon('check')}<p>لا شيء مطلوب الآن. أحسنت!</p></div>`}</div>
       </div>`;
     const nameForm = $('#nameForm');
     if (nameForm) nameForm.addEventListener('submit', e => {
@@ -1384,7 +1387,7 @@
         <div class="stack-lg">
           <div class="card stack center">
             <p class="muted">نتيجتك</p>
-            <div class="price-tag" style="font-size:2.6rem">${score}/${answers.length}</div>
+            ${scoreRing(pct(score, answers.length), `${score}/${answers.length}`)}
             <p>الأسعار: ${S.lc[form].partA}/${partA.length} · فهم الطلبات: ${S.lc[form].partB}/${partB.length}</p>
             ${prev ? `<p class="pill ${score >= prev.score ? 'good' : 'amber'}">في البداية: ${prev.score}/${prev.total}</p>` : ''}
           </div>
@@ -1419,11 +1422,12 @@
           ${UNITS.map((u, i) => {
             const done = unitPassed(u.id);
             const best = checkBest(u.id);
+            const now = u.week === wk;
             return `
-            <a class="card unit-card" href="#/unit/${u.id}">
+            <a class="card unit-card ${now ? 'current' : ''}" href="#/unit/${u.id}">
               <span class="unit-badge ${done ? 'done' : ''}">${done ? icon('check') : icon(u.icon)}</span>
               <span class="grow stack" style="gap:4px">
-                <span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}${u.week === wk ? ' · <strong style="color:var(--brand)">هذا الأسبوع</strong>' : ''}</span>
+                <span class="unit-meta"><span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}</span>${now ? '<span class="pill brand">هذا الأسبوع</span>' : ''}</span>
                 <strong>${esc(u.title.ar)}</strong>
                 ${progressBar(pct(unitStepsDone(u.id), STEPS.length), `تقدّم الوحدة ${i + 1}`)}
                 <span class="muted small">${unitStepsDone(u.id)}/${STEPS.length} خطوات${best != null ? ` · اختبار الوحدة ${best}%` : ''}</span>
@@ -1482,22 +1486,25 @@
             ? `<a class="btn hero-btn" href="#/unit/${u}/${nextS.id}">${doneCount ? 'تابع' : 'ابدأ'}: ${esc(nextS.ar)} ${icon('next')}</a>`
             : `<p class="small">${icon('check', 'inline-ico')} أكملت كل خطوات الوحدة</p>`}
         </section>
-        <div class="stack">
+        <ol class="tl" aria-label="خطوات الوحدة">
           ${STEPS.map((st, n) => {
             const done = isDone(st);
+            const cur = nextS && st.id === nextS.id;
             const extra = st.id === 'check' && best != null ? ` · أفضل نتيجة ${best}%` : '';
-            const time = st.min ? ` · ${st.min} د` : ' · في العمل';
+            const time = st.min ? ` · ${st.min}&nbsp;د` : ' · في العمل'; // the unit stays with its number
             return `
-            <a class="step ${done ? 'done' : ''} ${nextS && st.id === nextS.id ? 'current' : ''}" href="#/unit/${u}/${st.id}">
-              <span class="ico">${done ? icon('check') : icon(st.icon)}</span>
-              <span class="grow">
-                <span class="title">${n + 1}. ${esc(st.ar)}</span><br>
-                <span class="strand">${esc(st.hint)}${time}${extra}</span>
-              </span>
-              <span class="chev muted">${icon('next')}</span>
-            </a>`;
+            <li class="${done ? 'done' : ''}">
+              <a class="step ${done ? 'done' : ''} ${cur ? 'current' : ''}" href="#/unit/${u}/${st.id}">
+                <span class="ico">${done ? icon('check') : icon(st.icon)}</span>
+                <span class="grow">
+                  <span class="title">${n + 1}. ${esc(st.ar)}</span><span class="sr-only">${done ? '، أنجزتها' : cur ? '، الخطوة التالية' : ''}</span><br>
+                  <span class="strand">${esc(st.hint)}${time}${extra}</span>
+                </span>
+                <span class="chev">${icon('next')}</span>
+              </a>
+            </li>`;
           }).join('')}
-        </div>
+        </ol>
         <details class="acc">
           <summary>أهداف الوحدة <span class="chev">${icon('down')}</span></summary>
           <div class="acc-body">
@@ -1550,6 +1557,8 @@
     $('[data-act="done"]', host).addEventListener('click', () => { markStep(u, 'context'); go(`#/unit/${u}/model`); });
   }
 
+  // Bubble header: who speaks, and what a tap does (hear the line, or show a hidden one).
+  const bubbleHead = (s, ic = 'volume') => `<span class="b-head"><span class="speaker ${s}">${s === 'c' ? 'العميل' : 'أنت'}</span>${icon(ic, 'b-ico')}</span>`;
   function dialogueHtml(lines, stages, opts = {}) {
     let lastSt = null;
     return `<div class="dialogue">${lines.map((l, i) => {
@@ -1562,7 +1571,7 @@
       const hide = opts.hideK && l.s === 'k';
       return `${chip}
         <button class="bubble ${l.s} ${hide ? 'hidden-line' : ''}" type="button" data-line="${i}" ${hide ? '' : `data-say="${esc(l.en)}" data-role="${l.s}"`}>
-          <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
+          ${bubbleHead(l.s, hide ? 'eye' : 'volume')}
           <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
           <span class="gloss">${esc(l.ar)}</span>
         </button>`;
@@ -1807,7 +1816,7 @@
           host.innerHTML = `
             <div class="card stack center">
               <p class="muted">النتيجة</p>
-              <div class="price-tag" style="font-size:2.6rem">${results.filter(r => r.ok).length}/${results.length}</div>
+              ${scoreRing(score, `${results.filter(r => r.ok).length}/${results.length}`, score >= 75 ? 'good' : 'amber')}
               <p>${score >= 75 ? 'فهمٌ ممتاز للعميل!' : 'استمع إلى العبارات مرة أخرى ثم أعد المحاولة.'}</p>
             </div>
             <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} أعد المحاولة</button>
@@ -1835,7 +1844,7 @@
     const addBubble = l => {
       built.insertAdjacentHTML('beforeend', `
         <button class="bubble ${l.s}" type="button" data-say="${esc(l.en)}" data-role="${l.s}">
-          <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
+          ${bubbleHead(l.s)}
           <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
           <span class="gloss">${esc(l.ar)}</span>
         </button>`);
@@ -1907,7 +1916,7 @@
     const addBubble = l => {
       log.insertAdjacentHTML('beforeend', `
         <button class="bubble ${l.s}" type="button" data-say="${esc(l.en)}" data-role="${l.s}">
-          <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
+          ${bubbleHead(l.s)}
           <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
         </button>`);
       showEl(log.lastElementChild);
@@ -2082,7 +2091,7 @@
       host.innerHTML = `
         <div class="card stack center">
           <p class="muted">إجابات صحيحة في دقيقة</p>
-          <div class="price-tag">${score}</div>
+          <div class="big-num">${score}</div>
           <p class="muted small">من ${answered} محاولة</p>
           ${isBest ? '<p class="pill good">رقم قياسي جديد!</p>' : `<p class="pill">أفضل نتيجة: ${best}</p>`}
         </div>
@@ -2119,7 +2128,7 @@
       host.innerHTML = `
         <div class="card stack center">
           <p class="muted">نتيجة اختبار الوحدة</p>
-          <div class="price-tag">${score}%</div>
+          ${scoreRing(score, `${score}%`, passed ? 'good' : 'amber')}
           <p class="pill ${passed ? 'good' : 'amber'}">${passed ? 'اجتزت الوحدة!' : `تحتاج ${P.meta.passMark}% لاجتياز الوحدة`}</p>
         </div>
         <div class="stack">
@@ -2204,20 +2213,20 @@
   function viewPractice() {
     setBar('التدريب', 'تمارين قصيرة لأي وقت');
     const due = srsDue().length;
-    const tile = (href, ic, title, sub) => `
+    const tile = (href, ic, title, sub, tint = '') => `
       <a class="card unit-card" href="${href}">
-        <span class="unit-badge">${icon(ic)}</span>
+        <span class="unit-badge ${tint}">${icon(ic)}</span>
         <span class="grow"><strong>${title}</strong><br><span class="muted small">${sub}</span></span>
         <span class="chev">${icon('next')}</span>
       </a>`;
     view.innerHTML = `
       <div class="stack">
-        ${tile('#/review', 'cards', `المراجعة اليومية${due ? ` · ${due}` : ''}`, 'العبارات التي تعلمتها، في الوقت المناسب لتثبيتها')}
-        ${tile('#/numbers', 'hash', 'الأرقام والأسعار', 'استمع واكتب، اقرأ وقل، و13 أم 30؟')}
+        ${tile('#/review', 'cards', `المراجعة اليومية${due ? ` <span class="pill violet">${countAr(due, W.phrase)}</span>` : ''}`, 'العبارات التي تعلمتها، في الوقت المناسب لتثبيتها', 't-violet')}
+        ${tile('#/numbers', 'hash', 'الأرقام والأسعار', 'استمع واكتب، اقرأ وقل، و13 أم 30؟', 't-good')}
         ${tile('#/dialogues', 'chat', 'الحوارات', 'كل حوارات الوحدات، مع إخفاء دورك للتدريب')}
-        ${tile('#/watch', 'alert', 'انتبه!', 'كلمات خادعة وأرقام متشابهة')}
+        ${tile('#/watch', 'alert', 'انتبه!', 'كلمات خادعة وأرقام متشابهة', 't-amber')}
         <button class="card unit-card" type="button" data-help>
-          <span class="unit-badge">${icon('help')}</span>
+          <span class="unit-badge t-red">${icon('help')}</span>
           <span class="grow"><strong>عبارات سريعة</strong><br><span class="muted small">عبارات تحتاجها أثناء العمل: اسمعها، أو اعرضها للعميل بخط كبير</span></span>
         </button>
       </div>`;
@@ -2470,6 +2479,7 @@
         const l = d.lines[+b.dataset.line];
         b.classList.remove('hidden-line');
         b.dataset.say = l.en; b.dataset.role = 'k';
+        $('.b-ico', b).outerHTML = icon('volume', 'b-ico');
         say(l.en, 'k');
       }, { once: true }));
     }
@@ -3314,6 +3324,8 @@
     if (!S.profile.startedAt) { S.profile.startedAt = dayKey(); save(); }
     if (hasProgress()) keepStorage();
     window.addEventListener('hashchange', render);
+    // iOS Safari applies :active (the pressed look of cards) only when a touch listener exists.
+    document.addEventListener('touchstart', () => {}, { passive: true });
     render();
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
       navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });
