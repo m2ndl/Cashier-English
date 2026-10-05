@@ -4,6 +4,8 @@ October 2026 · app version 2.2.0 (commit `75fc789`). Line numbers refer to that
 
 **Status:** all 15 findings are fixed: 1–5 in version 2.3.0 and 6–15 in version 2.4.0. Each section ends with what changed. The recorded-audio suggestion under "Beyond the interface" is still open.
 
+A follow-up review of the visual layer, fixed in 2.5.0, is in [ui-review.md](ui-review.md).
+
 After the fixes, axe-core reports no violations on 66 screens. That includes the trainer pages, scanned after unlocking. No screen has horizontal overflow, touch targets under 44 px or text under 13 px.
 
 ## How the app was evaluated
