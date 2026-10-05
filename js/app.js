@@ -76,6 +76,7 @@
     upload: '<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19.5h14"/>',
     print: '<path d="M7 9V4h10v5"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M7 14h10v6H7z"/>',
     share: '<circle cx="17.5" cy="5.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="17.5" cy="18.5" r="2.5"/><path d="M8.7 10.8l6.6-4M8.7 13.2l6.6 4"/>',
+    shareIOS: '<path d="M12 14.5V3.5"/><path d="M8 7l4-4 4 4"/><path d="M8.5 10H6.5a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1h-2"/>',
     users: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4"/><path d="M17.5 14.2A6 6 0 0 1 21 20"/>',
     chat: '<path d="M4 5.5h16v10H10l-4.5 4v-4H4z"/>',
     complaint: '<path d="M4 5.5h16v10H10l-4.5 4v-4H4z"/><path d="M12 8v3.5M12 13.5h.01"/>',
@@ -101,7 +102,8 @@
     swap: '<path d="M4 8h14l-3.5-3.5"/><path d="M20 16H6l3.5 3.5"/>',
     star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.9l-5.25 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
     trash: '<path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/>',
-    copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5A1.5 1.5 0 0 0 14 3.5H5A1.5 1.5 0 0 0 3.5 5v9A1.5 1.5 0 0 0 5 15.5h3.5"/>'
+    copy: '<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5A1.5 1.5 0 0 0 14 3.5H5A1.5 1.5 0 0 0 3.5 5v9A1.5 1.5 0 0 0 5 15.5h3.5"/>',
+    expand: '<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>'
   };
   const icon = (name, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[name] || IC.info}</svg>`;
 
@@ -170,7 +172,9 @@
       pulses: {},
       survey: null,
       best: {},
-      trainer: { ratings: [], pending: null, align: { A: null, B: null } }
+      trainer: { ratings: [], pending: null, align: { A: null, B: null }, unlocked: false },
+      backupAt: 0,     // when the learner last exported or shared a copy of their data
+      installLater: 0  // the install card stays hidden until this time
     };
   }
   // Saved and imported data is rebuilt field by field: only known keys, checked types and
@@ -275,7 +279,10 @@
         P.assessments.filter(x => x.summative).forEach(t => { map[t.id] = Array.isArray(a.map[t.id]) ? uniq(a.map[t.id].filter(id => PLO[id])) : []; });
         d.trainer.align[w] = { name: str(a.name, 60), map, at: num(a.at) };
       });
+      d.trainer.unlocked = T.unlocked === true;
     }
+    d.backupAt = num(r.backupAt);
+    d.installLater = num(r.installLater);
     return d;
   }
   function load() {
@@ -285,9 +292,14 @@
   }
   let S = load();
   let saveTimer = null;
+  let saveFailed = false;
   function save() {
     clearTimeout(saveTimer); saveTimer = null;
-    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage full or blocked */ }
+    try { localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch (e) {
+      // Storage is full or blocked: say so once, so the learner doesn't lose work unknowingly.
+      if (!saveFailed) { saveFailed = true; setTimeout(warnSaveFailed, 0); }
+    }
   }
   function saveSoon() { if (!saveTimer) saveTimer = setTimeout(save, 2000); }
   window.addEventListener('pagehide', save);
@@ -323,12 +335,15 @@
     if (typeof score === 'number') { rec.last = score; rec.best = Math.max(rec.best || 0, score); }
     S.steps[u][st] = rec;
     save();
+    keepStorage();
   }
   function checkBest(u) {
     const list = S.checks[u] || [];
     return list.length ? Math.max(...list.map(c => c.pct)) : null;
   }
   const unitPassed = u => (checkBest(u) || 0) >= P.meta.passMark;
+  // A step counts as complete when it was done; the unit check, when it was passed.
+  const stepComplete = (u, id) => (id === 'check' ? unitPassed(u) : stepDone(u, id));
   const unitStepsDone = u => STEPS.filter(s => stepDone(u, s.id)).length;
   const overallPct = () => pct(UNITS.reduce((n, u) => n + unitStepsDone(u.id), 0), UNITS.length * STEPS.length);
   function currentWeek() {
@@ -345,7 +360,6 @@
   function secondsBetween(fromKey, toKey) {
     return Object.keys(S.time).filter(k => k >= fromKey && k <= toKey).reduce((n, k) => n + S.time[k], 0);
   }
-  const minutesLast7 = () => Math.round(secondsBetween(addDays(dayKey(), -6), dayKey()) / 60);
   const minutesTotal = () => Math.round(Object.values(S.time).reduce((a, b) => a + b, 0) / 60);
   const daysActive = () => Object.keys(S.time).filter(k => S.time[k] >= 60).length;
 
@@ -554,8 +568,12 @@
         </div>
         <div class="stack">${body}</div>
       </div>`;
+    // The page behind can't be reached while the sheet is open (inert where supported,
+    // and Tab wraps around inside the sheet).
+    const behind = $$('.skip, .app-bar, #view, .tab-bar');
     const close = (refocus = true) => {
       wrap.remove();
+      behind.forEach(el => { el.inert = false; });
       document.body.style.overflow = '';
       document.removeEventListener('keydown', onKey);
       closeSheet = null;
@@ -563,13 +581,61 @@
       const to = opts.focus ? $(opts.focus) : back;
       if (refocus && to && to.isConnected) to.focus();
     };
-    const onKey = e => { if (e.key === 'Escape') close(); };
+    const onKey = e => {
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key === 'Tab') trapTab(e, wrap);
+    };
     wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
     document.addEventListener('keydown', onKey);
     document.body.appendChild(wrap);
+    behind.forEach(el => { el.inert = true; });
     document.body.style.overflow = 'hidden';
     $('[data-close]', wrap).focus();
     closeSheet = close;
+    return wrap;
+  }
+  // Keep keyboard focus inside a dialog.
+  function trapTab(e, box) {
+    const f = $$('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex="0"]', box)
+      .filter(el => el.getClientRects().length);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+  // A phrase in large type, to turn the phone toward a customer.
+  function showBig(text) {
+    const back = document.activeElement;
+    const wrap = document.createElement('div');
+    wrap.className = 'big-phrase';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', 'العبارة بخط كبير');
+    wrap.innerHTML = `
+      <p class="say" lang="en" dir="ltr">${esc(text)}</p>
+      <div class="row wrap" style="justify-content:center">
+        <button class="btn" type="button" data-say="${esc(text)}" data-role="k">${icon('volume')} استمع</button>
+        <button class="btn ghost" type="button" data-close-big>إغلاق</button>
+      </div>`;
+    const behind = $$('.skip, .app-bar, #view, .tab-bar, .sheet-backdrop');
+    const was = behind.map(el => el.inert);
+    const close = () => {
+      wrap.remove();
+      behind.forEach((el, i) => { el.inert = was[i]; });
+      document.removeEventListener('keydown', onKey, true);
+      if (back && back.isConnected) back.focus();
+    };
+    // Captured first, so Escape closes only this view and not the sheet under it.
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); }
+      else if (e.key === 'Tab') { e.stopImmediatePropagation(); trapTab(e, wrap); }
+    };
+    wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close-big]')) close(); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(wrap);
+    behind.forEach(el => { el.inert = true; });
+    $('[data-close-big]', wrap).focus();
   }
 
   let seqId = 0;
@@ -683,6 +749,23 @@
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 2800);
   }
+  // Counted nouns in Arabic: 1 → "عبارة واحدة", 2 → "عبارتان", 3–10 → "3 عبارات", 11+ → "11 عبارة".
+  // Each word lists the forms for one, two, 3–10 and the rest; the dual changes with the case,
+  // so words used after a preposition or another noun have their own (genitive) entry.
+  const PLURAL = (() => { try { return new Intl.PluralRules('ar'); } catch (e) { return null; } })();
+  const W = {
+    phrase: ['عبارة واحدة', 'عبارتان', 'عبارات', 'عبارة'],
+    phraseGen: ['عبارة واحدة', 'عبارتين', 'عبارات', 'عبارة'],
+    attempt: ['محاولة واحدة', 'محاولتان', 'محاولات', 'محاولة'],
+    minute: ['دقيقة واحدة', 'دقيقتان', 'دقائق', 'دقيقة'],
+    day: ['يوم واحد', 'يومان', 'أيام', 'يومًا']
+  };
+  function countAr(n, w) {
+    const c = PLURAL ? PLURAL.select(n) : n === 1 ? 'one' : n === 2 ? 'two' : n >= 3 && n <= 10 ? 'few' : 'many';
+    if (c === 'one') return w[0];
+    if (c === 'two') return w[1];
+    return `${n} ${c === 'few' ? w[2] : w[3]}`;
+  }
   // Arabic text from program.js may mark English fragments with backticks.
   const rich = s => esc(s).replace(/`([^`]+)`/g, '<bdi class="en" lang="en" dir="ltr">$1</bdi>');
   const plain = s => String(s || '').replace(/`/g, '');
@@ -700,7 +783,35 @@
     `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}">${icon('volume')}استمع</button>` +
     (slow ? `<button class="audio-btn" type="button" data-say="${esc(text)}" data-role="${role}" data-slow="1">${icon('slow')}ببطء</button>` : '');
   const ploChips = ids => ids.map(id => `<span class="pill brand" title="${esc(PLO[id] ? PLO[id].en : id)}">${esc(id)}</span>`).join(' ');
-  const progressBar = v => `<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><span style="width:${v}%"></span></div>`;
+  const progressBar = (v, label = 'التقدّم') => `<div class="progress" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${v}"><span style="width:${v}%"></span></div>`;
+  // A table that may scroll sideways: reachable and named for keyboard and screen-reader users.
+  const scrollBox = label => `<div class="table-scroll" tabindex="0" role="region" aria-label="${esc(label)}">`;
+  // Scrolling. Activities replace their content in place, so each new item starts at the top,
+  // and anything that appears below the fold (feedback, the next button) is scrolled into view.
+  const motionOK = () => !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let scrollSeq = 0;
+  // Chrome can commit one more frame of a smooth scroll that was still running, so the jump
+  // to the top is repeated on the next frame unless another scroll was asked for since.
+  function toTop() {
+    const my = ++scrollSeq;
+    window.scrollTo(0, 0);
+    requestAnimationFrame(() => { if (my === scrollSeq && window.scrollY) window.scrollTo(0, 0); });
+  }
+  // Scroll just enough to show el in full: below the app bar, above the tab bar, and above
+  // an activity's sticky action bar unless el is inside it.
+  function showEl(el) {
+    scrollSeq++;
+    if (!el || !el.isConnected) return;
+    const r = el.getBoundingClientRect();
+    if (!r.height) return;
+    const top = $('.app-bar').getBoundingClientRect().bottom + 8;
+    const bar = Math.max(0, ...$$('.action-bar', view).filter(b => !b.contains(el)).map(b => b.offsetHeight));
+    const tabs = $('.tab-bar'); // hidden during lessons
+    const bottom = (tabs.getClientRects().length ? tabs.getBoundingClientRect().top : window.innerHeight) - 8 - bar;
+    let dy = r.bottom > bottom ? r.bottom - bottom : 0;
+    if (r.top - dy < top) dy = r.top - top; // never push its top out of view
+    if (Math.abs(dy) > 2) window.scrollTo({ top: window.scrollY + dy, behavior: motionOK() ? 'smooth' : 'auto' });
+  }
   // Navigating to the current hash fires no hashchange, so re-render directly.
   const go = hash => { if (location.hash === hash) render(); else location.hash = hash; };
   // For invalid links: move on without leaving the bad address in the history.
@@ -708,6 +819,9 @@
 
   // Tap-to-hear anywhere: any element with data-say.
   document.addEventListener('click', async e => {
+    // A link away from an activity in progress asks first, before the address changes.
+    const away = e.target.closest('a[href^="#"]');
+    if (away && away.getAttribute('href') !== location.hash && !okToLeave()) { e.preventDefault(); return; }
     const b = e.target.closest('[data-say]');
     if (b) {
       e.preventDefault();
@@ -718,22 +832,27 @@
       return;
     }
     if (e.target.closest('[data-help]')) { e.preventDefault(); openHelp(); return; }
+    const big = e.target.closest('[data-big]');
+    if (big) { e.preventDefault(); showBig(big.dataset.big); return; }
     const link = e.target.closest('a[href^="#"]');
     if (link && link.getAttribute('href') === location.hash) { e.preventDefault(); render(); }
   });
 
   function openHelp() {
     openSheet('عبارات سريعة', `
-      <p class="muted small" style="margin-bottom:4px">اضغط على العبارة لتسمعها، أو اعرضها للعميل.</p>
+      <p class="muted small" style="margin-bottom:4px">اضغط على العبارة لتسمعها، أو على ${icon('expand', 'inline-ico')} لتعرضها للعميل بخط كبير.</p>
       <div class="stack-lg">
         ${P.quickHelp.map(g => `
           <section class="stack">
             <h3>${esc(g.group.ar)}</h3>
             ${g.items.map(i => `
-              <button class="phrase-btn" type="button" data-say="${esc(i.en)}" data-role="k">
-                <span class="play">${icon('play')}</span>
-                <span class="grow"><span class="say" lang="en" dir="ltr" style="display:block">${esc(i.en)}</span><span class="gloss">${esc(i.ar)}</span></span>
-              </button>`).join('')}
+              <div class="phrase-row">
+                <button class="phrase-btn" type="button" data-say="${esc(i.en)}" data-role="k">
+                  <span class="play">${icon('play')}</span>
+                  <span class="grow"><span class="say" lang="en" dir="ltr" style="display:block">${esc(i.en)}</span><span class="gloss">${esc(i.ar)}</span></span>
+                </button>
+                <button class="show-btn" type="button" data-big="${esc(i.en)}" aria-label="اعرض «${esc(i.ar)}» بخط كبير">${icon('expand')}</button>
+              </div>`).join('')}
           </section>`).join('')}
       </div>`, { focus: '#helpBtn' });
   }
@@ -796,6 +915,162 @@
   }
 
   // =====================================================================
+  // Keeping progress safe. Progress lives only in this browser's storage, which Safari on
+  // iPhone clears after seven days of use without a visit (Home Screen apps are exempt)
+  // and which other browsers may evict when the device is short of space.
+  // =====================================================================
+  const UA = navigator.userAgent || '';
+  const isIOS = /iPhone|iPad|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(UA);
+  const installed = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const hasProgress = () => Object.keys(S.steps).length > 0 || !!S.lc.entry;
+  // Anything a restore would overwrite, the trainer's ratings included.
+  const hasData = () => hasProgress() || !!S.lc.exit || Object.keys(S.srs).length > 0 || Object.keys(S.missions).length > 0 ||
+    !!S.survey || S.trainer.ratings.length > 0 || !!S.trainer.align.A;
+
+  let persistAsked = false;
+  // Ask the browser not to evict the data. Chrome and Safari decide silently; Firefox may ask.
+  function keepStorage() {
+    if (persistAsked) return;
+    persistAsked = true;
+    try {
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persisted().then(p => p || navigator.storage.persist()).catch(() => {});
+    } catch (e) { /* not supported */ }
+  }
+  function warnSaveFailed() {
+    const sheet = openSheet('لم يُحفظ تقدّمك', `
+      <p>لا يستطيع المتصفح حفظ تقدّمك على هذا الجهاز، لذلك قد يضيع عند إغلاق التطبيق.</p>
+      <p class="small muted">قد يكون السبب التصفح الخاص أو امتلاء ذاكرة الجهاز. احفظ نسخة من تقدّمك الآن، ثم افتح التطبيق في نافذة عادية.</p>
+      <button class="btn" type="button" data-act="export-now">${icon('download')} احفظ نسخة من تقدّمي</button>`);
+    if (!sheet) { toast('تعذّر حفظ تقدّمك على هذا الجهاز'); return; }
+    $('[data-act="export-now"]', sheet).addEventListener('click', exportData);
+  }
+
+  // Backups: a file the learner can keep or send to the trainer, and import again later.
+  const backupObj = () => ({ program: P.meta.id, version: P.meta.version, exportedAt: new Date().toISOString(), data: S });
+  const backupName = () => `${P.meta.id}-${(S.profile.name || 'learner').replace(/[^\w؀-ۿ-]+/g, '-')}-${dayKey()}`;
+  const markBackup = () => { S.backupAt = Date.now(); save(); };
+  // Shared as .txt because Chrome only shares a fixed list of file types; the import accepts both.
+  function backupFile() {
+    try { return new File([JSON.stringify(backupObj())], `${backupName()}.txt`, { type: 'text/plain' }); } catch (e) { return null; }
+  }
+  function readBackup(text) {
+    try {
+      const obj = JSON.parse(String(text || '').trim());
+      return isObj(obj) && isObj(obj.data) && obj.data.v === 2 ? obj.data : isObj(obj) && obj.v === 2 ? obj : null;
+    } catch (e) { return null; }
+  }
+  function restoreBackup(data, done) {
+    if (hasData() && !confirm('سيستبدل هذا بياناتك الحالية. هل تريد المتابعة؟')) return;
+    S = sanitize(data);
+    save(); applySettings();
+    toast(done);
+    render();
+  }
+  // Remind once a week to send the learning record, which carries a backup file.
+  const backupDue = () => {
+    if (!hasProgress()) return false;
+    const since = S.backupAt || (S.profile.startedAt ? new Date(S.profile.startedAt + 'T00:00:00').getTime() : Date.now());
+    return Date.now() - since >= 7 * 864e5;
+  };
+
+  // Installing. Chrome offers a one-tap install prompt; iPhone needs Share › Add to Home Screen.
+  // A Home Screen app on iPhone does not see the progress kept in Safari, so learners who have
+  // started copy it over first and paste it into the installed app.
+  let installEvent = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installEvent = e;
+    const card = $('#installCard');
+    if (card) card.outerHTML = installCardHtml();
+  });
+  window.addEventListener('appinstalled', () => { installEvent = null; const c = $('#installCard'); if (c) c.remove(); });
+  const showInstall = () => !installed() && !!(installEvent || isIOS || isAndroid) && !(S.installLater > Date.now());
+  function installCardHtml() {
+    let how;
+    if (installEvent) how = `<button class="btn block" type="button" data-act="install">${icon('download')} ثبّت التطبيق</button>`;
+    else if (isIOS) {
+      how = `
+        <ol class="steps-list small">
+          ${hasProgress() ? `<li>التطبيق المثبّت يبدأ فارغًا، فانسخ تقدّمك أولًا:<br><button class="btn soft small" type="button" data-act="copy-progress">${icon('copy')} انسخ تقدّمي</button></li>` : ''}
+          <li>اضغط زر المشاركة ${icon('shareIOS', 'inline-ico')} في المتصفح.</li>
+          <li>اختر «إضافة إلى الشاشة الرئيسية».</li>
+          <li>افتح التطبيق من الشاشة الرئيسية${hasProgress() ? '، واضغط فيه «الصق تقدّمي»' : '، وتدرّب منه دائمًا'}.</li>
+        </ol>`;
+    } else how = '<p class="small">افتح قائمة المتصفح ⋮ واختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</p>';
+    return `
+      <div class="card stack" id="installCard">
+        <div class="row" style="align-items:flex-start"><span class="unit-badge">${icon('download')}</span>
+          <span class="grow"><strong>ثبّت التطبيق على هاتفك</strong><br><span class="muted small">${isIOS
+            ? 'يفتح بلمسة واحدة ويحفظ تقدّمك. أما في المتصفح فقد يُحذف تقدّمك إذا لم تفتح التطبيق أسبوعًا.'
+            : 'يفتح بلمسة واحدة، ويعمل دون إنترنت، ويحفظ تقدّمك بأمان أكبر.'}</span></span>
+        </div>
+        ${how}
+        <button class="btn ghost small" type="button" data-act="install-later" style="align-self:flex-start">لاحقًا</button>
+      </div>`;
+  }
+  // Shown in a freshly installed iPhone app, until progress exists.
+  const moveCardHtml = () => `
+    <div class="card stack" id="moveCard">
+      <div class="row" style="align-items:flex-start"><span class="unit-badge">${icon('copy')}</span>
+        <span class="grow"><strong>بدأت التدريب في المتصفح؟</strong><br><span class="muted small">انقل تقدّمك إلى هنا: افتح التطبيق في المتصفح واضغط «انسخ تقدّمي»، ثم ارجع إلى هنا.</span></span>
+      </div>
+      <button class="btn soft" type="button" data-act="paste-progress">${icon('copy')} الصق تقدّمي</button>
+    </div>`;
+  async function doInstall() {
+    const ev = installEvent;
+    if (!ev) return;
+    installEvent = null;
+    try {
+      ev.prompt();
+      const choice = await ev.userChoice;
+      if (choice && choice.outcome === 'accepted') { const c = $('#installCard'); if (c) c.remove(); return; }
+    } catch (e) { /* show the manual steps instead */ }
+    const c = $('#installCard');
+    if (c) c.outerHTML = installCardHtml();
+  }
+  async function copyProgress() {
+    save();
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(backupObj()));
+      toast('نُسخ تقدّمك. أضف التطبيق الآن إلى الشاشة الرئيسية.');
+    } catch (e) {
+      exportData();
+      toast('تعذّر النسخ، فحُفظ تقدّمك في ملف. استورده من الإعدادات في التطبيق.');
+    }
+  }
+  async function pasteProgress() {
+    let text = null;
+    try { text = await navigator.clipboard.readText(); } catch (e) { text = null; }
+    if (text === null) { pasteSheet(); return; } // no clipboard access: paste by hand
+    const data = readBackup(text);
+    if (data) restoreBackup(data, 'نُقل تقدّمك');
+    else toast('لم أجد تقدّمًا منسوخًا. اضغط «انسخ تقدّمي» في المتصفح أولًا، ثم حاول مرة أخرى.');
+  }
+  function pasteSheet() {
+    const sheet = openSheet('الصق تقدّمك', `
+      <p class="small">المس المربع مطولًا واختر «لصق»، ثم اضغط «نقل».</p>
+      <textarea class="input" id="pasteBox" rows="4" dir="ltr" lang="en" autocomplete="off" aria-label="النص المنسوخ"></textarea>
+      <button class="btn" type="button" data-act="paste-go">نقل</button>`);
+    if (!sheet) return;
+    $('[data-act="paste-go"]', sheet).addEventListener('click', () => {
+      const data = readBackup($('#pasteBox', sheet).value);
+      if (data) restoreBackup(data, 'نُقل تقدّمك');
+      else toast('هذا ليس تقدّمًا منسوخًا من التطبيق');
+    });
+  }
+  const safeActs = {
+    install: doInstall,
+    'install-later': () => { S.installLater = Date.now() + 3 * 864e5; save(); const c = $('#installCard'); if (c) c.remove(); },
+    'copy-progress': copyProgress,
+    'paste-progress': pasteProgress
+  };
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]');
+    if (b && safeActs[b.dataset.act]) safeActs[b.dataset.act]();
+  });
+
+  // =====================================================================
   // Router
   // =====================================================================
   const ROUTES = [
@@ -845,23 +1120,56 @@
   const navStack = [];
   let currentPath = '';
   let replacing = false;
+  let restoring = false; // putting the address back after the learner chose to stay
+  let popping = 0;       // history entries skipped at once when a lesson is closed
+  // While an activity is under way, the question to ask before leaving it.
+  let leaveMsg = null;
+  const LEAVE = 'لم تُنهِ هذا التمرين بعد، وسيضيع ما أنجزته فيه. هل تريد الخروج؟';
+  const guardLeave = (msg = LEAVE) => { leaveMsg = msg; };
+  const releaseLeave = () => { leaveMsg = null; };
+  const okToLeave = () => { if (leaveMsg && !confirm(leaveMsg)) return false; leaveMsg = null; return true; };
+  window.addEventListener('beforeunload', e => { if (leaveMsg) { e.preventDefault(); e.returnValue = ''; } });
+  // Unit steps are lessons: no tab bar, and the header button closes the lesson.
+  const isLesson = path => /^unit\/[^/]+\/[^/]+$/.test(path);
   function render() {
+    const asked = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+    if (restoring) { restoring = false; if (asked === currentPath) return; }
+    // Leaving an activity part-way with the phone's back (or forward) button: ask first. If the
+    // learner stays, put the address back without redrawing, so the activity keeps its state.
+    // (Links ask before they navigate; see the click handler.)
+    if (asked !== currentPath && !okToLeave()) {
+      restoring = true;
+      if (navStack.length > 1 && navStack[navStack.length - 2] === asked) history.forward(); else history.back();
+      return;
+    }
     stopAll();
     cleanups.forEach(f => { try { f(); } catch (e) { /* ignore */ } });
     cleanups = [];
     if (closeSheet) closeSheet(false);
 
-    let path = location.hash.replace(/^#\/?/, '').replace(/\/+$/, '');
+    let path = asked;
     let m = match(path);
     if (!m) { path = ''; m = match(''); }
+    // Trainer pages hold the exit assessments: they open only after the trainer code.
+    if (path.split('/')[0] === 'trainer' && !trainerOpen()) m = { fn: viewTrainerCode, params: {} };
     currentPath = path;
 
-    if (replacing) { navStack[navStack.length - 1] = path; replacing = false; }
+    if (popping) {
+      navStack.length = Math.max(1, navStack.length - popping);
+      popping = 0;
+      if (navStack[navStack.length - 1] !== path) navStack.push(path);
+    }
+    else if (replacing) { navStack[navStack.length - 1] = path; replacing = false; }
     else if (navStack.length > 1 && navStack[navStack.length - 2] === path) navStack.pop();
     else if (navStack[navStack.length - 1] !== path) navStack.push(path);
 
     const top = ['', 'units', 'practice', 'progress'].includes(path);
-    $('#backBtn').hidden = top;
+    const lesson = isLesson(path);
+    document.documentElement.classList.toggle('lesson', lesson);
+    const backBtn = $('#backBtn');
+    backBtn.hidden = top;
+    backBtn.innerHTML = icon(lesson ? 'x' : 'back');
+    backBtn.setAttribute('aria-label', lesson ? 'إغلاق الدرس' : 'رجوع');
     const tab = tabOf(path);
     $$('.tab-bar a').forEach(a => { if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
 
@@ -869,6 +1177,8 @@
     view.removeAttribute('dir');
     view.removeAttribute('lang');
     view.classList.remove('trainer');
+    // Start at the top before the view draws, so a view can scroll to what it shows next.
+    toTop();
     try { m.fn(m.params); }
     catch (err) {
       console.error(err);
@@ -883,14 +1193,24 @@
         S = fresh(); applySettings(); go('#/');
       });
     }
-    window.scrollTo(0, 0);
     view.focus({ preventScroll: true });
   }
   function goBack() {
+    if (!okToLeave()) return;
+    if (isLesson(currentPath)) { exitLesson(); return; }
     if (navStack.length > 1) { history.back(); return; }
     // Opened directly on an inner page: go up without leaving a history entry behind.
     replacing = true;
     location.replace('#/' + parentOf(currentPath));
+  }
+  // Closing a lesson returns to its unit page, skipping the steps visited on the way.
+  function exitLesson() {
+    if (!okToLeave()) return;
+    const target = 'unit/' + currentPath.split('/')[1];
+    const i = navStack.lastIndexOf(target);
+    if (i >= 0 && i < navStack.length - 1) { popping = navStack.length - 1 - i; history.go(-popping); return; }
+    replacing = true;
+    location.replace('#/' + target);
   }
 
   // =====================================================================
@@ -907,65 +1227,77 @@
     // The mission is offered once the week's unit is under way, not before any learning.
     const missionDue = !S.missions[weekUnit.id] && STEPS.some(st => st.id !== 'mission' && stepDone(weekUnit.id, st.id));
     const allPassed = passed === UNITS.length;
-    const entryCard = `
-        <a class="card unit-card" href="#/lc/entry">
-          <span class="unit-badge">${icon('headphones')}</span>
-          <span class="grow"><strong>${started ? 'اختبار الاستماع الأولي' : 'قبل أن تبدأ: اختبار استماع قصير'}</strong><br><span class="muted small">10 أسئلة قصيرة لقياس نقطة البداية</span></span>
+    const goal = P.meta.dailyMinutes || 20;
+    const today = Math.round((S.time[dayKey()] || 0) / 60);
+    const card = (href, ic, title, sub) => `
+        <a class="card unit-card" href="${href}">
+          <span class="unit-badge">${icon(ic)}</span>
+          <span class="grow"><strong>${title}</strong><br><span class="muted small">${sub}</span></span>
           <span class="chev">${icon('next')}</span>
         </a>`;
+    const entryCard = card('#/lc/entry', 'headphones', 'اختبار الاستماع الأولي', '10 أسئلة قصيرة لقياس نقطة البداية');
 
-    let cards = !S.lc.entry && !started ? entryCard : '';
-    if (nx) {
-      cards += `
-        <a class="card unit-card" href="#/unit/${nx.unit.id}/${nx.step.id}">
-          <span class="unit-badge">${icon(nx.step.icon)}</span>
-          <span class="grow">
-            <span class="muted small">${Object.keys(S.steps).length ? 'تابع من حيث توقفت' : 'ابدأ هنا'} · الوحدة ${unitIndex(nx.unit.id) + 1}</span><br>
-            <strong>${esc(nx.step.ar)}</strong> <span class="muted small">— ${esc(nx.unit.title.ar)}</span>
-          </span>
-          <span class="chev">${icon('next')}</span>
-        </a>`;
-    } else if (allPassed && !S.lc.exit) {
-      cards += `
-        <a class="card unit-card" href="#/final">
-          <span class="unit-badge done">${icon('award')}</span>
-          <span class="grow"><strong>أنهيت الوحدات! حان وقت التقييم الختامي</strong><br><span class="muted small">اختبار الاستماع الختامي والاستبانة</span></span>
-          <span class="chev">${icon('next')}</span>
-        </a>`;
+    // The one next thing to do is the welcome card's button: the entry listening check before
+    // anything else, then the next unfinished step, then the final assessment.
+    const next = !S.lc.entry && !started
+      ? { href: '#/lc/entry', label: 'ابدأ باختبار استماع قصير', sub: '10 أسئلة قصيرة لقياس نقطة البداية' }
+      : nx ? { href: `#/unit/${nx.unit.id}/${nx.step.id}`, label: `${started ? 'تابع' : 'ابدأ'}: ${nx.step.ar}`, sub: `الوحدة ${unitIndex(nx.unit.id) + 1} · ${nx.unit.title.ar}` }
+      : allPassed && !S.lc.exit ? { href: '#/final', label: 'التقييم الختامي', sub: 'أنهيت الوحدات! بقي اختبار الاستماع الختامي والاستبانة' }
+      : null;
+
+    // On iPhone, installing comes before anything else: progress made in the browser has to be
+    // moved by hand. Elsewhere it follows the next step.
+    const install = showInstall() ? installCardHtml() : '';
+    const installFirst = isIOS && !hasProgress();
+    let cards = installFirst ? install : '';
+    // A new learner's button opens the listening check; the first lesson is offered next to it.
+    if (nx && !started && next && next.href === '#/lc/entry') {
+      cards += card(`#/unit/${nx.unit.id}/${nx.step.id}`, nx.step.icon, `أو ابدأ الوحدة ${unitIndex(nx.unit.id) + 1} مباشرة`, `${esc(nx.step.ar)} — ${esc(nx.unit.title.ar)}`);
     }
-    if (due) {
-      cards += `
-        <a class="card unit-card" href="#/review">
-          <span class="unit-badge">${icon('cards')}</span>
-          <span class="grow"><strong>مراجعة اليوم: ${due} ${due === 1 ? 'عبارة' : 'عبارات'}</strong><br><span class="muted small">التكرار المتباعد يثبّت العبارات في الذاكرة</span></span>
-          <span class="chev">${icon('next')}</span>
-        </a>`;
-    }
-    if (missionDue) {
-      cards += `
-        <a class="card unit-card" href="#/unit/${weekUnit.id}/mission">
-          <span class="unit-badge">${icon('briefcase')}</span>
-          <span class="grow"><strong>مهمة هذا الأسبوع في العمل</strong><br><span class="muted small">${esc(preview(weekUnit.mission.ar, 90))}</span></span>
-          <span class="chev">${icon('next')}</span>
-        </a>`;
-    }
+    if (!installFirst) cards += install;
+    if (due) cards += card('#/review', 'cards', `مراجعة اليوم: ${countAr(due, W.phrase)}`, 'التكرار المتباعد يثبّت العبارات في الذاكرة');
+    if (missionDue) cards += card(`#/unit/${weekUnit.id}/mission`, 'briefcase', 'مهمة هذا الأسبوع في العمل', esc(weekUnit.mission.short || preview(weekUnit.mission.ar, 90)));
     if (!S.lc.entry && started) cards += entryCard;
+    if (backupDue()) cards += card('#/record', 'share', 'أرسل سجلّك إلى المدرب', 'مرة كل أسبوع: يرى مدربك تقدّمك، وتبقى عنده نسخة منه إن ضاع هاتفك.');
+    if (isIOS && installed() && !hasProgress()) cards += moveCardHtml();
+
+    // New learners are asked their name once, here; it goes on the learning record.
+    const askName = !started && !S.profile.name;
     view.innerHTML = `
       <div class="stack-lg">
         <section class="hero stack">
           <p class="small">الأسبوع ${wk} من ${P.meta.weeks} · ${esc(weekUnit.title.ar)}</p>
           <h2>مرحبًا${S.profile.name ? '، ' + esc(S.profile.name) : ''}!</h2>
           ${started ? `
-          ${progressBar(overallPct())}
+          ${progressBar(overallPct(), 'تقدّمك في البرنامج')}
           <div class="stat-grid">
             <div class="stat"><div class="v">${passed}/${UNITS.length}</div><div class="l">وحدات مجتازة</div></div>
-            <div class="stat"><div class="v">${minutesLast7()}</div><div class="l">دقيقة هذا الأسبوع</div></div>
+            <div class="stat ${today >= goal ? 'met' : ''}"><div class="v">${today >= goal ? `${icon('check', 'inline-ico')} ` : ''}${today}/${goal}</div><div class="l">${today >= goal ? 'أنجزت هدف اليوم' : 'دقيقة اليوم'}</div></div>
             <div class="stat"><div class="v">${due}</div><div class="l">للمراجعة</div></div>
           </div>` : `
-          <p>${P.meta.weeks} وحدات، وحدة لكل أسبوع. كل يوم نحو 20 دقيقة من الخطوات القصيرة، ثم مهمة تطبّقها في عملك.</p>`}
+          <p>${P.meta.weeks} وحدات، وحدة لكل أسبوع. كل يوم نحو ${goal} دقيقة من الخطوات القصيرة، ثم مهمة تطبّقها في عملك.</p>`}
+          ${askName ? `
+          <form class="stack" id="nameForm" style="gap:6px">
+            <label class="small" for="heroName">ما اسمك؟ يظهر في سجل تعلّمك الذي ترسله إلى المدرب.</label>
+            <div class="hero-name">
+              <input class="input" id="heroName" placeholder="الاسم" autocomplete="given-name" maxlength="60">
+              <button class="btn on-hero" type="submit">حفظ</button>
+            </div>
+          </form>` : ''}
+          ${next ? `<a class="btn hero-btn" href="${next.href}">${esc(next.label)} ${icon('next')}</a>
+          <p class="small hero-sub">${esc(next.sub)}</p>` : ''}
         </section>
         <div class="stack">${cards || `<div class="card">${icon('check')}<p>لا شيء مطلوب الآن. أحسنت!</p></div>`}</div>
       </div>`;
+    const nameForm = $('#nameForm');
+    if (nameForm) nameForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const name = $('#heroName').value.trim().slice(0, 60);
+      if (!name) { $('#heroName').focus(); return; }
+      S.profile.name = name;
+      save();
+      render();
+    });
   }
 
   // Listening check runner (entry and exit forms). Test conditions: two plays per item, no feedback until the end.
@@ -990,13 +1322,15 @@
           <p class="muted small">${part}</p>
           <div class="card prompt-card stack">
             <button class="big-play" type="button" data-act="play" aria-label="استمع">${icon('play')}</button>
-            <p class="muted small" id="playsLeft">يمكنك الاستماع مرتين</p>
+            <p class="muted small" id="playsLeft">اضغط للاستماع. يمكنك الاستماع مرتين.</p>
           </div>
           ${it.t === 'price'
             ? `<input class="num-input" id="ans" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="السعر">
                <button class="btn block" type="button" data-act="submit">التالي</button>`
             : optionButtons(it.options, false)}
+          <button class="btn ghost small" type="button" data-act="skip" style="align-self:center">لا أعرف</button>
         </div>`;
+      toTop();
       $('[data-act="play"]', host).addEventListener('click', play);
       if (it.t === 'price') {
         const submit = () => {
@@ -1009,7 +1343,9 @@
       } else {
         $$('.option', host).forEach(b => b.addEventListener('click', () => record(+b.dataset.opt)));
       }
-      play();
+      // "Don't know" is recorded as a wrong answer with no response, rather than a guess.
+      $('[data-act="skip"]', host).addEventListener('click', () => record(null));
+      // No automatic play: the learner starts each item when ready, and both plays are theirs.
     }
     async function play() {
       const btn = $('[data-act="play"]', host);
@@ -1023,14 +1359,16 @@
     function record(ans) {
       if (answered) return;
       answered = true;
+      guardLeave('لم تُنهِ اختبار الاستماع بعد، وستضيع إجاباتك. هل تريد الخروج؟');
       const it = items[idx];
-      const ok = it.t === 'price' ? ans === it.amount : ans === it.correct;
-      answers.push({ t: it.t, plo: it.plo, ok, ans: it.t === 'price' ? ans : (it.options[ans] || null) });
+      const ok = ans !== null && (it.t === 'price' ? ans === it.amount : ans === it.correct);
+      answers.push({ t: it.t, plo: it.plo, ok, ans: ans === null ? null : it.t === 'price' ? ans : (it.options[ans] || null) });
       idx++;
       if (idx < items.length) draw(); else finish();
     }
     function finish() {
       stopAll();
+      releaseLeave();
       const score = answers.filter(a => a.ok).length;
       const partA = answers.filter(a => a.t === 'price');
       const partB = answers.filter(a => a.t !== 'price');
@@ -1052,6 +1390,7 @@
           </div>
           <button class="btn block" type="button" data-act="done">متابعة</button>
         </div>`;
+      toTop();
       $('[data-act="done"]', host).addEventListener('click', done);
     }
     draw();
@@ -1086,7 +1425,7 @@
               <span class="grow stack" style="gap:4px">
                 <span class="muted small">الوحدة ${i + 1} · الأسبوع ${u.week}${u.week === wk ? ' · <strong style="color:var(--brand)">هذا الأسبوع</strong>' : ''}</span>
                 <strong>${esc(u.title.ar)}</strong>
-                ${progressBar(pct(unitStepsDone(u.id), STEPS.length))}
+                ${progressBar(pct(unitStepsDone(u.id), STEPS.length), `تقدّم الوحدة ${i + 1}`)}
                 <span class="muted small">${unitStepsDone(u.id)}/${STEPS.length} خطوات${best != null ? ` · اختبار الوحدة ${best}%` : ''}</span>
               </span>
               <span class="chev">${icon('next')}</span>
@@ -1130,7 +1469,7 @@
     const i = unitIndex(u);
     setBar(`الوحدة ${i + 1}`, unit.title.ar);
     const best = checkBest(u);
-    const isDone = st => (st.id === 'check' ? unitPassed(u) : stepDone(u, st.id));
+    const isDone = st => stepComplete(u, st.id);
     const doneCount = STEPS.filter(isDone).length;
     const nextS = STEPS.find(st => !isDone(st));
     view.innerHTML = `
@@ -1138,7 +1477,7 @@
         <section class="hero stack">
           <p class="small">الوحدة ${i + 1} · الأسبوع ${unit.week}</p>
           <h2>${esc(unit.title.ar)}</h2>
-          ${progressBar(pct(doneCount, STEPS.length))}
+          ${progressBar(pct(doneCount, STEPS.length), 'تقدّم الوحدة')}
           ${nextS
             ? `<a class="btn hero-btn" href="#/unit/${u}/${nextS.id}">${doneCount ? 'تابع' : 'ابدأ'}: ${esc(nextS.ar)} ${icon('next')}</a>`
             : `<p class="small">${icon('check', 'inline-ico')} أكملت كل خطوات الوحدة</p>`}
@@ -1180,8 +1519,8 @@
     setBar(s.ar, `الوحدة ${unitIndex(u) + 1}: ${unit.title.ar}`);
     view.innerHTML = `
       <div class="stack-lg">
-        <div class="step-progress" aria-label="الخطوة ${sIdx + 1} من ${STEPS.length}">
-          ${STEPS.map((x, n) => `<span class="${n < sIdx ? 'past' : n === sIdx ? 'now' : ''}"></span>`).join('')}
+        <div class="step-progress" role="img" aria-label="الخطوة ${sIdx + 1} من ${STEPS.length}، أنجزت ${STEPS.filter(x => stepComplete(u, x.id)).length} من ${STEPS.length}">
+          ${STEPS.map((x, n) => `<span class="${n === sIdx ? 'now' : ''} ${stepComplete(u, x.id) ? 'done' : ''}"></span>`).join('')}
         </div>
         <p class="small muted" style="margin-top:-8px">الخطوة ${sIdx + 1} من ${STEPS.length} · ${esc(s.hint)}</p>
         <div id="stepBody" class="stack-lg"></div>
@@ -1238,7 +1577,7 @@
       btn.innerHTML = `${icon('stop')} إيقاف`;
       await playLines(lines, i => {
         $$('.bubble', root).forEach(b => b.classList.remove('active'));
-        if (i >= 0) { const b = $(`.bubble[data-line="${i}"]`, root); if (b) { b.classList.add('active'); b.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }
+        if (i >= 0) { const b = $(`.bubble[data-line="${i}"]`, root); if (b) { b.classList.add('active'); showEl(b); } }
       });
       $$('.bubble', root).forEach(b => b.classList.remove('active'));
       if (btn.isConnected) { btn.dataset.state = ''; btn.innerHTML = `${icon('play')} استمع للحوار كاملًا`; }
@@ -1251,16 +1590,18 @@
     const picks = uniq(m.lines.map(l => l.st).filter(Boolean)).map(st => m.lines.find(l => l.st === st));
     let shuffled = shuffle(picks);
     for (let k = 0; k < 5 && shuffled.every((l, n) => l === picks[n]); k++) shuffled = shuffle(picks);
+    // The learner first reads and hears the model. The ordering task then hides the text, so it
+    // checks what they took in rather than what they can copy; the text comes back afterwards.
     host.innerHTML = `
       <div class="card stack">
-        <h3>${esc(m.title.ar)}</h3>
+        <h2 class="h-card">${esc(m.title.ar)}</h2>
         <p class="muted small">${esc(m.setting.ar)}</p>
-        <p class="small">استمع إلى الحوار، ثم رتّب جمله.</p>
+        <p class="small" id="modelHint">استمع إلى الحوار واقرأه. ثم رتّب جمله دون النظر إلى النص.</p>
         <button class="btn" type="button" data-act="play-all">${icon('play')} استمع للحوار كاملًا</button>
       </div>
-      ${dialogueHtml(m.lines, unit.stages)}
-      <div class="card stack" id="orderTask">
-        <h3>رتّب الحوار</h3>
+      <div id="modelText">${dialogueHtml(m.lines, unit.stages)}</div>
+      <div class="card stack" id="orderTask" hidden>
+        <h2 class="h-card">رتّب الحوار</h2>
         <p class="muted small">اضغط على الجمل بالترتيب الذي قيلت به.</p>
         <ol class="order-list" id="orderAnswer"></ol>
         <div class="options" id="orderChoices">
@@ -1272,12 +1613,21 @@
         </div>
         <div id="orderFb"></div>
       </div>
-      <div id="modelNext"></div>`;
+      <div id="modelNext" class="action-bar"><button class="btn block" type="button" data-act="order">جاهز؟ رتّب الحوار ${icon('next')}</button></div>`;
     wirePlayAll(host, m.lines);
+    $('[data-act="order"]', host).addEventListener('click', () => {
+      stopAll();
+      $('#modelText', host).hidden = true;
+      $('#orderTask', host).hidden = false;
+      $('#modelHint', host).textContent = 'رتّب جمل الحوار من الذاكرة. يمكنك أن تستمع إليه مرة أخرى.';
+      $('#modelNext', host).innerHTML = '';
+      toTop();
+    });
     let pos = 0, mistakes = 0;
     $('#orderChoices', host).addEventListener('click', e => {
       const b = e.target.closest('[data-pick]');
       if (!b || b.disabled) return;
+      guardLeave();
       if (+b.dataset.pick === pos) {
         const l = picks[pos];
         b.remove();
@@ -1285,15 +1635,23 @@
         $('#orderFb', host).innerHTML = '';
         pos++;
         if (pos === picks.length) {
+          releaseLeave();
           markStep(u, 'model', pct(picks.length, picks.length + mistakes));
           $('#orderFb', host).innerHTML = feedback(true, 'أحسنت! رتّبت الحوار.', 'ستقول جملك بنفسك في خطوة لعب الأدوار.');
+          $('#modelText', host).outerHTML = `
+            <details class="acc" id="modelText">
+              <summary>نص الحوار كاملًا <span class="chev">${icon('down')}</span></summary>
+              <div class="acc-body">${dialogueHtml(m.lines, unit.stages)}</div>
+            </details>`;
           $('#modelNext', host).innerHTML = nextBtn();
+          showEl($('#orderFb', host));
         }
       } else {
         mistakes++;
         b.classList.add('shake');
         setTimeout(() => b.classList.remove('shake'), 400);
-        $('#orderFb', host).innerHTML = feedback(false, 'ليست هذه الجملة التالية. استمع مرة أخرى إن احتجت.');
+        $('#orderFb', host).innerHTML = feedback(false, 'ليست هذه الجملة التالية. استمع إلى الحوار مرة أخرى إن احتجت.');
+        showEl($('#orderFb', host));
       }
     });
   }
@@ -1329,10 +1687,11 @@
         <div class="activity-head">${progressBar(pct(i, list.length))}<span class="counter num">${i + 1} / ${list.length}</span></div>
         ${i === 0 ? '<div class="note brand"><strong>طريقة التدريب:</strong> استمع إلى كل عبارة ثم كررها بصوت عالٍ. استخدم «ببطء» إذا احتجت.</div>' : ''}
         ${phraseCard(p)}
-        <div class="grid-2">
+        <div class="action-bar"><div class="grid-2">
           <button class="btn ghost" type="button" data-act="prev" ${i === 0 ? 'disabled' : ''}>${icon('back')} السابق</button>
           <button class="btn" type="button" data-act="next">${i + 1 < list.length ? 'التالي' : 'إنهاء'} ${icon('next')}</button>
-        </div>`;
+        </div></div>`;
+      toTop();
       $('[data-act="prev"]', host).addEventListener('click', () => { if (i > 0) { i--; draw(); } });
       $('[data-act="next"]', host).addEventListener('click', () => { i++; if (i < list.length) draw(); else finish(); });
       say(p.c[0], 'c');
@@ -1344,11 +1703,12 @@
       host.innerHTML = `
         <div class="card stack center">
           <div class="empty" style="padding:4px;color:var(--good)">${icon('check')}</div>
-          <h3>أحسنت! تدربت على ${list.length} عبارة.</h3>
+          <h2 class="h-card">أحسنت! تدربت على ${countAr(list.length, W.phraseGen)}.</h2>
           <p class="muted small">أُضيفت إلى مراجعتك اليومية لتراها مرة أخرى في الوقت المناسب.</p>
         </div>
         <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} من البداية</button>
         ${nextBtn()}`;
+      toTop();
       $('[data-act="again"]', host).addEventListener('click', () => { i = 0; draw(); });
     }
     draw();
@@ -1372,24 +1732,27 @@
           <button class="btn block" type="button" data-act="submit">تحقق</button>`;
       } else {
         const prompt = it.t === 'meaning' ? 'استمع: ماذا يقصد العميل؟' : 'العميل يقول… ماذا ترد؟';
-        const textVisible = it.t === 'respond';
+        // The "show text" toggle shares a line with the prompt so four options fit on small phones.
+        const toggle = it.t !== 'respond' && showText === 'toggle';
         body = `
           <div class="card prompt-card stack">
             <button class="big-play" type="button" data-act="play" aria-label="استمع">${icon('play')}</button>
-            <p class="muted small">${prompt}</p>
-            ${textVisible ? `<p class="say big" lang="en" dir="ltr">${esc(it.text)}</p>`
-              : (showText === 'toggle' ? `<button class="btn ghost small" type="button" data-act="show" style="align-self:center">${icon('eye')} إظهار النص</button><p class="say" lang="en" dir="ltr" id="hiddenText" hidden>${esc(it.text)}</p>` : '')}
+            ${toggle ? `<div class="prompt-row"><p class="muted small">ماذا يقصد العميل؟</p><button class="btn ghost small" type="button" data-act="show">${icon('eye')} إظهار النص</button></div>
+              <p class="say" lang="en" dir="ltr" id="hiddenText" hidden>${esc(it.text)}</p>`
+              : `<p class="muted small">${prompt}</p>`}
+            ${it.t === 'respond' ? `<p class="say big" lang="en" dir="ltr">${esc(it.text)}</p>` : ''}
           </div>
           ${optionButtons(it.options, it.t === 'respond')}`;
       }
       host.innerHTML = `
         <div class="stack">
-          ${title ? `<h3>${title}</h3>` : ''}
+          ${title ? `<h2 class="h-card">${title}</h2>` : ''}
           <div class="activity-head">${progressBar(pct(idx, items.length))}<span class="counter num">${idx + 1} / ${items.length}</span></div>
           ${body}
           <div id="qfb"></div>
-          <div id="qnext"></div>
+          <div id="qnext" class="action-bar"></div>
         </div>`;
+      toTop();
       const playBtn = $('[data-act="play"]', host);
       const play = async () => { playBtn.classList.add('playing'); await say(it.text, it.t === 'price' ? 'c' : it.role); if (playBtn.isConnected) playBtn.classList.remove('playing'); };
       playBtn.addEventListener('click', play);
@@ -1415,6 +1778,7 @@
     function answer(ok, given) {
       const it = items[idx];
       results.push({ ok, it, given });
+      guardLeave();
       let detail = '';
       if (it.t === 'price') {
         $('[data-act="submit"]', host).disabled = true;
@@ -1426,8 +1790,9 @@
       }
       $('#qfb', host).innerHTML = feedback(ok, ok ? 'صحيح!' : 'ليست هذه الإجابة.', detail);
       $('#qnext', host).innerHTML = `<button class="btn block" type="button" data-act="next">${idx + 1 < items.length ? 'التالي' : 'النتيجة'} ${icon('next')}</button>`;
-      $('[data-act="next"]', host).addEventListener('click', () => { idx++; if (idx < items.length) draw(); else onFinish(results); });
+      $('[data-act="next"]', host).addEventListener('click', () => { idx++; if (idx < items.length) draw(); else { releaseLeave(); onFinish(results); toTop(); } });
       $('[data-act="next"]', host).focus({ preventScroll: true });
+      showEl($('#qfb', host));
     }
     draw();
   }
@@ -1460,7 +1825,7 @@
     let idx = 0, mistakes = 0, turns = 0;
     host.innerHTML = `
       <div class="card stack">
-        <h3>${esc(unit.roleplay.title.ar)}</h3>
+        <h2 class="h-card">${esc(unit.roleplay.title.ar)}</h2>
         <p class="muted small">${esc(unit.roleplay.setting.ar)} — ابنِ الحوار معنا: في كل دور لك، اختر الجملة المناسبة.</p>
       </div>
       <div class="dialogue" id="built"></div>
@@ -1474,7 +1839,7 @@
           <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
           <span class="gloss">${esc(l.ar)}</span>
         </button>`);
-      built.lastElementChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      showEl(built.lastElementChild);
     };
     async function advance() {
       const custLines = [];
@@ -1490,8 +1855,10 @@
           ${optionButtons(opts, true)}
           <div id="bfb"></div>
         </div>`;
+      showEl($('#choice .card', host));
       $$('#choice .option', host).forEach(b => b.addEventListener('click', () => {
         const i = +b.dataset.opt;
+        guardLeave();
         if (i === correct) {
           $('#choice', host).innerHTML = '';
           addBubble(line);
@@ -1502,11 +1869,13 @@
           b.classList.add('wrong');
           b.disabled = true;
           $('#bfb', host).innerHTML = feedback(false, 'ليست الأنسب هنا. جرّب مرة أخرى.', `تلميح: ${esc(line.ar)}`);
+          showEl($('#bfb', host));
         }
       }));
       if (custLines.length) await playLines(custLines);
     }
     function finish() {
+      releaseLeave();
       const score = pct(turns, turns + mistakes);
       markStep(u, 'build', score);
       $('#choice', host).innerHTML = '';
@@ -1517,6 +1886,7 @@
           ${nextBtn()}
         </div>`;
       wirePlayAll(host, lines);
+      showEl($('#buildEnd', host));
     }
     advance();
   }
@@ -1528,7 +1898,7 @@
     let idx = 0, said = 0, micDisabled = false;
     host.innerHTML = `
       <div class="card stack">
-        <h3>${esc(unit.roleplay.title.ar)}</h3>
+        <h2 class="h-card">${esc(unit.roleplay.title.ar)}</h2>
         <p class="muted small">الآن دون خيارات: يتكلم العميل، وتقول أنت جملتك بالإنجليزية. ${micOn() ? 'اضغط الميكروفون وتكلم.' : 'قلها بصوت عالٍ ثم أظهر الإجابة.'}</p>
       </div>
       <div class="dialogue" id="rpLog"></div>
@@ -1540,7 +1910,7 @@
           <span class="speaker ${l.s}">${l.s === 'c' ? 'العميل' : 'أنت'}</span>
           <span class="say" lang="en" dir="ltr" style="display:block">${esc(l.en)}</span>
         </button>`);
-      log.lastElementChild.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      showEl(log.lastElementChild);
     };
     async function advance() {
       const turnBox = $('#turn', host);
@@ -1568,6 +1938,7 @@
           <p class="say small muted" lang="en" dir="ltr" id="hint" hidden>${esc(words.slice(0, 2).join(' '))} …</p>
           <div id="rpfb"></div>
         </div>`;
+      showEl($('.card', turnBox));
       $('[data-act="hint"]', turnBox).addEventListener('click', e => { $('#hint', turnBox).hidden = false; e.currentTarget.remove(); });
       $('[data-act="reveal"]', turnBox).addEventListener('click', () => reveal(line, null));
       const mic = $('[data-act="mic"]', turnBox);
@@ -1589,6 +1960,7 @@
           const marked = r.words.map((w, i) => r.marks[i] ? esc(w) : `<mark>${esc(w)}</mark>`).join(' ');
           $('#rpfb', host).innerHTML = feedback(false, r.score >= 0.5 ? 'قريب! حاول مرة أخرى.' : 'حاول مرة أخرى، أو اضغط «تلميح».',
             r.score >= 0.5 ? `<span class="say small" lang="en" dir="ltr" style="display:block">${marked}</span>` : '');
+          showEl($('#rpfb', host));
         }
       } catch (err) {
         btn.classList.remove('listening');
@@ -1603,12 +1975,14 @@
     }
     async function reveal(line, ok) {
       Mic.stop();
+      guardLeave();
       const turnBox = $('#turn', host);
       if (ok) said++;
       addBubble(line);
       idx++;
       if (ok) {
         turnBox.innerHTML = feedback(true, 'ممتاز! قلتها بشكل صحيح.');
+        showEl(turnBox);
         await say(line.en, 'k');
         if (host.isConnected) advance();
         return;
@@ -1621,11 +1995,13 @@
             <button class="btn ghost small" type="button" data-act="no">أحتاج تدريبًا</button>
           </div>
         </div>`;
+      showEl(turnBox);
       say(line.en, 'k');
       $('[data-act="yes"]', turnBox).addEventListener('click', () => { said++; advance(); });
       $('[data-act="no"]', turnBox).addEventListener('click', () => advance());
     }
     function finish() {
+      releaseLeave();
       const score = pct(said, kTurns);
       markStep(u, 'roleplay', score);
       $('#turn', host).innerHTML = `
@@ -1634,7 +2010,8 @@
           <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} من البداية</button>
           ${nextBtn()}
         </div>`;
-      $('[data-act="again"]', host).addEventListener('click', () => stepRoleplay({ unit, u, host, nextBtn }));
+      showEl($('#turn', host));
+      $('[data-act="again"]', host).addEventListener('click', () => { toTop(); stepRoleplay({ unit, u, host, nextBtn }); });
     }
     advance();
   }
@@ -1649,7 +2026,7 @@
       host.innerHTML = `
         <div class="card stack center">
           <div class="empty" style="padding:8px">${icon('bolt')}</div>
-          <h3>60 ثانية</h3>
+          <h2 class="h-card">60 ثانية</h2>
           <p>اقرأ ما يقوله العميل واختر ردك بأسرع ما يمكن. العبارات مألوفة لك، والهدف هو السرعة والطلاقة.</p>
           ${S.best[key] ? `<p class="pill good">أفضل نتيجة: ${S.best[key]}</p>` : ''}
           <button class="btn block" type="button" data-act="go">ابدأ</button>
@@ -1659,14 +2036,16 @@
     function run() {
       const total = 60;
       const t0 = Date.now();
+      guardLeave('جولة السرعة لم تنتهِ بعد. هل تريد الخروج؟');
       let score = 0, answered = 0, item;
       host.innerHTML = `
         <div class="stack">
-          <div class="activity-head">${progressBar(100)}<span class="counter num" id="tleft">60</span></div>
+          <div class="activity-head">${progressBar(100, 'الوقت المتبقي')}<span class="counter num" id="tleft">60</span></div>
           <div class="card prompt-card"><p class="say big" lang="en" dir="ltr" id="sq"></p></div>
           <div id="sopts"></div>
           <p class="center muted">النقاط: <span class="num" id="sscore">0</span></p>
         </div>`;
+      toTop();
       const bar = $('.progress > span', host);
       function nextItem() {
         const p = earlier.length && Math.random() < 0.3 ? pick(earlier) : pick(current);
@@ -1695,6 +2074,7 @@
       onLeave(() => clearInterval(timer));
     }
     function end(score, answered) {
+      releaseLeave();
       const best = Math.max(S.best[key] || 0, score);
       const isBest = score > (S.best[key] || 0);
       S.best[key] = best;
@@ -1708,6 +2088,7 @@
         </div>
         <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} جولة أخرى</button>
         ${nextBtn()}`;
+      toTop();
       $('[data-act="again"]', host).addEventListener('click', run);
     }
     intro();
@@ -1733,11 +2114,17 @@
       if (passed) markStep(u, 'check', score); else save();
       const wrong = results.filter(r => !r.ok);
       const pulse = S.pulses[u] || {};
+      // The next action comes straight after the score: move on after a pass; after a
+      // fail, review the phrases or retake. Mistakes and the optional pulse follow.
       host.innerHTML = `
         <div class="card stack center">
           <p class="muted">نتيجة اختبار الوحدة</p>
           <div class="price-tag">${score}%</div>
           <p class="pill ${passed ? 'good' : 'amber'}">${passed ? 'اجتزت الوحدة!' : `تحتاج ${P.meta.passMark}% لاجتياز الوحدة`}</p>
+        </div>
+        <div class="stack">
+          ${passed ? nextBtn() : `<a class="btn block" href="#/unit/${u}/phrases">${icon('list')} راجع العبارات</a>`}
+          <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} أعد الاختبار</button>
         </div>
         ${wrong.length ? `
         <details class="acc">
@@ -1749,7 +2136,7 @@
                 <p class="gloss">${esc(r.it.t === 'respond' ? r.it.phrase.kAr : r.it.phrase.cAr)}</p></div>`).join('')}</div>
         </details>` : ''}
         <div class="card stack">
-          <h3>رأيك في الوحدة</h3>
+          <h2 class="h-card">رأيك في الوحدة</h2>
           <p class="small">ما مدى فائدة هذه الوحدة لعملك؟</p>
           <div class="scale" id="pUseful">${[1, 2, 3, 4, 5].map(v => `<label><input type="radio" name="useful" value="${v}" ${pulse.useful === v ? 'checked' : ''}><span class="num">${v}</span></label>`).join('')}</div>
           <p class="muted small" style="display:flex;justify-content:space-between"><span>قليلة</span><span>كبيرة جدًا</span></p>
@@ -1757,9 +2144,7 @@
           <div class="scale">${[['easy', 'سهلة جدًا'], ['right', 'مناسبة'], ['hard', 'صعبة جدًا']].map(([v, l]) => `<label><input type="radio" name="level" value="${v}" ${pulse.level === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
           <label class="field">تعليق (اختياري)<textarea class="input" id="pComment" rows="2">${esc(pulse.comment || '')}</textarea></label>
           <button class="btn soft" type="button" data-act="pulse">إرسال الرأي</button>
-        </div>
-        <button class="btn ghost block" type="button" data-act="again">${icon('refresh')} أعد الاختبار</button>
-        ${passed ? nextBtn() : `<a class="btn ghost block" href="#/unit/${u}/phrases">راجع العبارات</a>`}`;
+        </div>`;
       $('[data-act="again"]', host).addEventListener('click', start);
       $('[data-act="pulse"]', host).addEventListener('click', e => {
         const useful = $('input[name="useful"]:checked', host);
@@ -1773,7 +2158,7 @@
     }
     host.innerHTML = `
       <div class="card stack">
-        <h3>اختبار الوحدة</h3>
+        <h2 class="h-card">اختبار الوحدة</h2>
         <p>10 أسئلة: فهم العميل واختيار الرد المناسب${priceCount ? ' وكتابة الأسعار' : ''}. تحتاج ${P.meta.passMark}% لاجتياز الوحدة، ويمكنك الإعادة.</p>
         <p class="muted small">هذا اختبار للتدريب يساعدك على معرفة مستواك. أما التحدث فيقيّمه المدربون في لعب الأدوار.</p>
         ${checkBest(u) != null ? `<p class="pill">أفضل نتيجة سابقة: ${checkBest(u)}%</p>` : ''}
@@ -1786,12 +2171,13 @@
     const m = S.missions[u];
     host.innerHTML = `
       <div class="card stack">
-        <div class="row"><span class="unit-badge">${icon('briefcase')}</span><h3 class="grow">مهمة هذا الأسبوع</h3></div>
+        <div class="row"><span class="unit-badge">${icon('briefcase')}</span><h2 class="h-card grow">مهمة هذا الأسبوع</h2></div>
         <p>${rich(unit.mission.ar)}</p>
+        ${watchList(unit.mission.items)}
         <p class="en small muted ltr" lang="en">${esc(unit.mission.en)}</p>
       </div>
       <div class="card stack">
-        <h3>سجل المهمة</h3>
+        <h2 class="h-card">سجل المهمة</h2>
         <label class="field">كم مرة استخدمت الإنجليزية مع عملاء هذا الأسبوع؟
           <input class="input num" id="mCount" type="number" inputmode="numeric" min="0" max="999" value="${m && m.count != null ? esc(m.count) : ''}">
         </label>
@@ -1832,13 +2218,14 @@
         ${tile('#/watch', 'alert', 'انتبه!', 'كلمات خادعة وأرقام متشابهة')}
         <button class="card unit-card" type="button" data-help>
           <span class="unit-badge">${icon('help')}</span>
-          <span class="grow"><strong>مساعدة سريعة</strong><br><span class="muted small">عبارات الطوارئ أثناء العمل</span></span>
+          <span class="grow"><strong>عبارات سريعة</strong><br><span class="muted small">عبارات تحتاجها أثناء العمل: اسمعها، أو اعرضها للعميل بخط كبير</span></span>
         </button>
       </div>`;
   }
 
   function viewNumbers() {
-    setBar('الأرقام والأسعار', 'اسمع السعر واكتبه');
+    const SUB = { listen: 'اسمع السعر واكتبه', say: 'اقرأ السعر وقله بالإنجليزية', pairs: 'ميّز 13 من 30، و14 من 40…' };
+    setBar('الأرقام والأسعار', SUB.listen);
     let mode = 'listen', right = 0, total = 0;
     view.innerHTML = `
       <div class="stack-lg">
@@ -1854,6 +2241,7 @@
     const setScore = () => { $('#nScore').textContent = `${right}/${total}`; };
     $$('.seg button').forEach(b => b.addEventListener('click', () => {
       mode = b.dataset.mode;
+      setBar('الأرقام والأسعار', SUB[mode]);
       $$('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
       right = 0; total = 0; setScore();
       draw();
@@ -1861,6 +2249,7 @@
     function draw() {
       stopAll();
       if (mode === 'listen') drawListen(); else if (mode === 'say') drawSay(); else drawPairs();
+      toTop();
     }
     function drawListen() {
       const amount = randomPrice();
@@ -1883,7 +2272,8 @@
           `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
         $('[data-act="check"]', body).remove();
         $('[data-act="next"]', body).addEventListener('click', draw);
-        $('[data-act="next"]', body).focus();
+        $('[data-act="next"]', body).focus({ preventScroll: true });
+        showEl($('#nFb'));
       };
       $('[data-act="check"]', body).addEventListener('click', check);
       $('#nAns').addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
@@ -1911,7 +2301,7 @@
             <button class="btn ghost small" type="button" data-act="no">أخطأت</button>
           </div>
         </div>`;
-      const reveal = () => { $('#nAnswer').hidden = false; const r = $('[data-act="reveal"]', body); if (r) r.remove(); };
+      const reveal = () => { $('#nAnswer').hidden = false; const r = $('[data-act="reveal"]', body); if (r) r.remove(); showEl($('#nAnswer')); };
       $('[data-act="reveal"]', body).addEventListener('click', reveal);
       $('[data-act="yes"]', body).addEventListener('click', () => { total++; right++; setScore(); draw(); });
       $('[data-act="no"]', body).addEventListener('click', () => { total++; setScore(); draw(); });
@@ -1930,10 +2320,10 @@
           const r = r1.score >= r2.score ? r1 : r2;
           heard.textContent = `سمعت: “${r.heard}”` + (r.score >= 0.8 ? ' ✓' : '');
           if (r.score >= 0.8) {
-            total++; right++; setScore(); reveal();
-            $('[data-act="yes"]', body).parentElement.remove();
-            body.insertAdjacentHTML('beforeend', `<button class="btn block" type="button" data-act="nx">التالي ${icon('next')}</button>`);
+            total++; right++; setScore();
+            $('[data-act="yes"]', body).parentElement.outerHTML = `<button class="btn block" type="button" data-act="nx">التالي ${icon('next')}</button>`;
             $('[data-act="nx"]', body).addEventListener('click', draw);
+            reveal();
           }
         } catch (err) {
           mic.classList.remove('listening');
@@ -1960,6 +2350,7 @@
         $('#nFb').innerHTML = feedback(ok, ok ? 'صحيح!' : `سمعت ${target}`, `<span class="say" lang="en" dir="ltr" style="display:block">${esc(text)}</span>`) +
           `<button class="btn block" type="button" data-act="next" style="margin-top:10px">التالي ${icon('next')}</button>`;
         $('[data-act="next"]', body).addEventListener('click', draw);
+        showEl($('#nFb'));
       }));
       say(text, 'c');
     }
@@ -1991,8 +2382,9 @@
         stopAll();
         if (!queue.length) {
           view.innerHTML = `
-            <div class="empty" style="color:var(--good)">${icon('award')}<p>أنهيت مراجعة ${total} ${total === 1 ? 'عبارة' : 'عبارات'}. أحسنت!</p></div>
+            <div class="empty" style="color:var(--good)">${icon('award')}<p>أنهيت مراجعة ${countAr(total, W.phraseGen)}. أحسنت!</p></div>
             <a class="btn block" href="#/">الرئيسية</a>`;
+          toTop();
           return;
         }
         const id = queue[0];
@@ -2013,16 +2405,20 @@
               <p class="gloss">${esc(p.kAr)}</p>
               <div class="row" style="justify-content:center">${audioBtns(p.k, 'k')}</div>
             </div>
-            <button class="btn block" type="button" data-act="flip">ماذا تقول؟ أظهر الرد</button>
-            <div id="grades" hidden class="grid-2" style="grid-template-columns:repeat(3,1fr)">
-              <button class="btn ghost" type="button" data-g="0">مرة أخرى</button>
-              <button class="btn ghost" type="button" data-g="1">صعبة</button>
-              <button class="btn" type="button" data-g="2">سهلة</button>
+            <div class="action-bar">
+              <button class="btn block" type="button" data-act="flip">ماذا تقول؟ أظهر الرد</button>
+              <div id="grades" hidden class="grid-2" style="grid-template-columns:repeat(3,1fr)">
+                <button class="btn ghost" type="button" data-g="0">مرة أخرى</button>
+                <button class="btn ghost" type="button" data-g="1">صعبة</button>
+                <button class="btn ghost" type="button" data-g="2">سهلة</button>
+              </div>
             </div>
           </div>`;
+        toTop();
         say(c, 'c');
         $('[data-act="flip"]').addEventListener('click', e => {
           $('#back').hidden = false; $('#grades').hidden = false; e.currentTarget.remove();
+          showEl($('#back'));
           say(p.k, 'k');
         });
         $$('[data-g]').forEach(b => b.addEventListener('click', () => {
@@ -2059,7 +2455,7 @@
       view.innerHTML = `
         <div class="stack-lg">
           <div class="card stack">
-            <h3>${esc(d.title.ar)}</h3>
+            <h2 class="h-card">${esc(d.title.ar)}</h2>
             <div class="row wrap">
               <button class="btn" type="button" data-act="play-all">${icon('play')} استمع للحوار كاملًا</button>
               <button class="btn ghost" type="button" data-act="hide" aria-pressed="${hideK}">${icon('eye')} ${hideK ? 'أظهر دوري' : 'أخفِ دوري'}</button>
@@ -2122,7 +2518,7 @@
         </div>
 
         <div class="card stack">
-          <h3>اختبار الاستماع</h3>
+          <h2 class="h-card">اختبار الاستماع</h2>
           <div class="compare">
             <div class="box"><div class="small muted">البداية</div><div class="v">${S.lc.entry ? `${S.lc.entry.score}/${S.lc.entry.total}` : '—'}</div></div>
             <div class="arrow">${icon('next')}</div>
@@ -2132,7 +2528,7 @@
         </div>
 
         <section class="stack">
-          <h3>الوحدات</h3>
+          <h2 class="h-card">الوحدات</h2>
           ${UNITS.map((u, i) => {
             const best = checkBest(u.id);
             const tries = (S.checks[u.id] || []).length;
@@ -2142,10 +2538,10 @@
               <span class="unit-badge ${unitPassed(u.id) ? 'done' : ''}">${unitPassed(u.id) ? icon('check') : icon(u.icon)}</span>
               <span class="grow stack" style="gap:6px">
                 <strong>${i + 1}. ${esc(u.title.ar)}</strong>
-                ${progressBar(pct(unitStepsDone(u.id), STEPS.length))}
+                ${progressBar(pct(unitStepsDone(u.id), STEPS.length), `تقدّم الوحدة ${i + 1}`)}
                 <span class="unit-facts small">
                   <span>الخطوات <b class="num">${unitStepsDone(u.id)}/${STEPS.length}</b></span>
-                  <span>الاختبار ${best != null ? `<span class="pill ${unitPassed(u.id) ? 'good' : 'amber'} num">${best}%</span>` : '<b>—</b>'}${tries ? ` <span class="muted">(${tries} ${tries === 1 ? 'محاولة' : tries === 2 ? 'محاولتان' : 'محاولات'})</span>` : ''}</span>
+                  <span>الاختبار ${best != null ? `<span class="pill ${unitPassed(u.id) ? 'good' : 'amber'} num">${best}%</span>` : '<b>—</b>'}${tries ? ` <span class="muted">(${countAr(tries, W.attempt)})</span>` : ''}</span>
                   ${pulse ? `<span>الفائدة <b class="num">${pulse.useful}/5</b></span>` : ''}
                   <span>المهمة <b>${S.missions[u.id] ? '✓' : '—'}</b></span>
                 </span>
@@ -2156,8 +2552,8 @@
         </section>
 
         <div class="card stack">
-          <h3>دقائق الدراسة في كل أسبوع</h3>
-          <div class="bars">${wkMinutes.map((m, i) => `<div class="bar-row"><span>الأسبوع ${i + 1}</span>${progressBar(pct(m, maxMin))}<span class="v">${m}</span></div>`).join('')}</div>
+          <h2 class="h-card">دقائق الدراسة في كل أسبوع</h2>
+          <div class="bars">${wkMinutes.map((m, i) => `<div class="bar-row"><span>الأسبوع ${i + 1}</span>${progressBar(pct(m, maxMin), `دقائق الأسبوع ${i + 1}`)}<span class="v">${m}</span></div>`).join('')}</div>
           <p class="muted small">الهدف: نحو ${P.meta.weeklyPattern[1].hours * 60} دقيقة أسبوعيًا على التطبيق. أيام النشاط: ${daysActive()}.</p>
         </div>
 
@@ -2179,20 +2575,27 @@
     return lines.join('\n');
   }
   function exportData() {
-    const name = (S.profile.name || 'learner').replace(/[^\w؀-ۿ-]+/g, '-');
-    const blob = new Blob([JSON.stringify({ program: P.meta.id, version: P.meta.version, exportedAt: new Date().toISOString(), data: S }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(backupObj(), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${P.meta.id}-${name}-${dayKey()}.json`;
+    a.download = `${backupName()}.json`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    markBackup();
   }
 
   function viewRecord() {
     setBar('سجل التعلّم', 'اعرضه على مدربك أو مشرفك');
+    // Without a name the trainer can't tell whose record this is, so ask for it here.
     view.innerHTML = `
       <div class="stack-lg">
+        ${S.profile.name ? '' : `
+        <form class="card stack no-print" id="recNameForm">
+          <label class="field" for="recName">اكتب اسمك ليعرف المدرب سجلّ من هذا</label>
+          <div class="row"><input class="input grow" id="recName" autocomplete="name" maxlength="60" placeholder="الاسم">
+            <button class="btn" type="submit">حفظ</button></div>
+        </form>`}
         <div class="card stack" id="record">
           <div class="center stack" style="gap:2px">
             <strong style="font-size:1.15rem">سجل التعلّم</strong>
@@ -2204,14 +2607,14 @@
             <tr><th>بداية البرنامج</th><td>${fmtDate(S.profile.startedAt)}</td></tr>
             <tr><th>تاريخ السجل</th><td>${fmtDate(dayKey())}</td></tr>
           </table>
-          <div class="table-scroll"><table class="plain">
+          ${scrollBox('جدول الوحدات')}<table class="plain">
             <thead><tr><th>الوحدة</th><th>الخطوات</th><th>الاختبار</th><th>المهمة</th></tr></thead>
             <tbody>${UNITS.map((u, i) => `<tr><td>${i + 1}. ${esc(u.title.ar)}</td><td class="num">${unitStepsDone(u.id)}/${STEPS.length}</td>
               <td class="num">${checkBest(u.id) != null ? checkBest(u.id) + '%' : '—'}</td><td>${S.missions[u.id] ? '✓' : '—'}</td></tr>`).join('')}</tbody>
           </table></div>
           <table class="plain">
             <tr><th>اختبار الاستماع</th><td class="num">البداية ${S.lc.entry ? `${S.lc.entry.score}/${S.lc.entry.total}` : '—'} · النهاية ${S.lc.exit ? `${S.lc.exit.score}/${S.lc.exit.total}` : '—'}</td></tr>
-            <tr><th>وقت الدراسة</th><td class="num">${minutesTotal()} دقيقة · ${daysActive()} يومًا</td></tr>
+            <tr><th>وقت الدراسة</th><td class="num">${countAr(minutesTotal(), W.minute)} · ${countAr(daysActive(), W.day)}</td></tr>
           </table>
           <p class="muted small">يوضح هذا السجل نشاط التطبيق فقط. تحقق المخرجات الشفهية يُقرَّر في لعب الأدوار الختامي الذي يقيّمه مدربان.</p>
         </div>
@@ -2219,14 +2622,40 @@
           <button class="btn" type="button" data-act="share">${icon('share')} مشاركة</button>
           <button class="btn ghost" type="button" data-act="print">${icon('print')} طباعة</button>
         </div>
+        <p class="muted small no-print">ترسل «مشاركة» السجل مع ملف فيه تقدّمك إن سمح هاتفك بذلك. احتفظ به أنت ومدربك: إذا ضاع تقدّمك فاستورده من الإعدادات.</p>
         <button class="btn ghost block no-print" type="button" data-act="export">${icon('download')} تنزيل البيانات (JSON)</button>
       </div>`;
     $('[data-act="print"]').addEventListener('click', () => window.print());
     $('[data-act="export"]').addEventListener('click', exportData);
+    const nameForm = $('#recNameForm');
+    if (nameForm) nameForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const name = $('#recName').value.trim().slice(0, 60);
+      if (!name) { $('#recName').focus(); return; }
+      S.profile.name = name;
+      save();
+      render();
+    });
+    let askedName = false;
     $('[data-act="share"]').addEventListener('click', async () => {
+      // Ask once for a name before sharing a record without one; a second tap shares anyway.
+      if (!S.profile.name && !askedName) {
+        askedName = true;
+        toast('اكتب اسمك أولًا ليعرف المدرب سجلّ من هذا');
+        $('#recName').focus();
+        return;
+      }
       const text = recordSummaryText();
+      const title = `${P.meta.title.en} — Learning record`;
       try {
-        if (navigator.share) { await navigator.share({ title: `${P.meta.title.en} — Learning record`, text }); return; }
+        if (navigator.share) {
+          // Attach the data as a backup the trainer can keep, where the phone can share files.
+          const file = backupFile();
+          const withFile = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
+          await navigator.share(withFile ? { title, text, files: [file] } : { title, text });
+          if (withFile) markBackup();
+          return;
+        }
       } catch (e) { if (e && e.name === 'AbortError') return; }
       try { await navigator.clipboard.writeText(text); toast('نُسخ السجل. الصقه في رسالة إلى المدرب.'); }
       catch (e) { toast('تعذّرت المشاركة'); }
@@ -2266,7 +2695,7 @@
         <div class="stack-lg">
           <div class="card stack">
             <p>عشرة أسئلة. الجزء أ: اكتب السعر الذي تسمعه. الجزء ب: اختر ما يريده العميل.</p>
-            <p class="muted small">يمكنك الاستماع مرتين لكل سؤال، ولا تظهر الإجابات الصحيحة حتى النهاية.</p>
+            <p class="muted small">اضغط زر التشغيل لتسمع كل سؤال، ويمكنك الاستماع مرتين. لا تظهر الإجابات الصحيحة حتى النهاية. إن لم تعرف الإجابة فاضغط «لا أعرف» بدل التخمين.</p>
             ${prev ? `<p class="pill">نتيجتك السابقة: ${prev.score}/${prev.total} (${fmtDate(prev.at)})</p><p class="muted small">إعادة الاختبار تستبدل النتيجة السابقة.</p>` : ''}
           </div>
           <button class="btn block" type="button" data-act="start">${prev ? 'أعد الاختبار' : 'ابدأ'}</button>
@@ -2315,13 +2744,13 @@
     view.innerHTML = `
       <div class="stack-lg">
         <div class="card stack">
-          <h3>الملف الشخصي</h3>
+          <h2 class="h-card">الملف الشخصي</h2>
           <label class="field">الاسم<input class="input" id="sName" value="${esc(S.profile.name)}"></label>
           <label class="field">المتجر أو القسم<input class="input" id="sStore" value="${esc(S.profile.store)}"></label>
           <label class="field">تاريخ بداية البرنامج<input class="input num" id="sStart" type="date" value="${esc(S.profile.startedAt || '')}"></label>
         </div>
         <div class="card stack">
-          <h3>اللغة والصوت</h3>
+          <h2 class="h-card">اللغة والصوت</h2>
           <label class="switch-row"><span>إظهار الترجمة العربية</span><span class="switch"><input type="checkbox" id="sAr" ${st.ar ? 'checked' : ''}><span></span></span></label>
           <p class="small">سرعة الكلام</p>
           ${seg('rate', [[0.8, 'أبطأ'], [1, 'عادية'], [1.15, 'أسرع']], st.rate)}
@@ -2333,24 +2762,22 @@
           <label class="switch-row"><span>التدريب بالميكروفون ${Mic.ok ? '' : '<span class="muted small">(غير مدعوم في هذا المتصفح)</span>'}</span><span class="switch"><input type="checkbox" id="sMic" ${st.mic && Mic.ok ? 'checked' : ''} ${Mic.ok ? '' : 'disabled'}><span></span></span></label>
         </div>
         <div class="card stack">
-          <h3>المظهر</h3>
+          <h2 class="h-card">المظهر</h2>
           ${seg('theme', [['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'داكن']], st.theme)}
         </div>
-        <a class="card unit-card" href="#/trainer">
-          <span class="unit-badge">${icon('users')}</span>
-          <span class="grow"><strong>للمدربين وفريق البرنامج</strong><br><span class="muted small">تصميم البرنامج، مصفوفة المواءمة، أدلة الورش، تقييم لعب الأدوار</span></span>
-          <span class="chev">${icon('next')}</span>
-        </a>
         <div class="card stack">
-          <h3>البيانات</h3>
+          <h2 class="h-card">البيانات</h2>
           <p class="muted small">تُحفظ بياناتك على هذا الجهاز فقط. صدّرها لإرسالها إلى المدرب أو لنقلها إلى جهاز آخر.</p>
           <div class="grid-2">
             <button class="btn ghost" type="button" data-act="export">${icon('download')} تصدير</button>
-            <label class="btn ghost" style="cursor:pointer">${icon('upload')} استيراد<input type="file" accept="application/json,.json" id="sImport" hidden></label>
+            <label class="btn ghost" style="cursor:pointer">${icon('upload')} استيراد<input type="file" accept="application/json,.json,text/plain,.txt" id="sImport" hidden></label>
           </div>
           <button class="btn danger" type="button" data-act="reset">${icon('trash')} مسح كل البيانات</button>
         </div>
-        <p class="center muted small">${esc(P.meta.title.en)} v${esc(P.meta.version)}</p>
+        <div class="center stack" style="gap:0">
+          <a class="link-btn" href="#/trainer" style="align-self:center">${icon('lock', 'inline-ico')} للمدربين</a>
+          <p class="muted small">${esc(P.meta.title.en)} v${esc(P.meta.version)}</p>
+        </div>
       </div>`;
     const saveProfile = () => {
       S.profile.name = $('#sName').value.trim().slice(0, 60);
@@ -2374,16 +2801,8 @@
       if (!f) return;
       const r = new FileReader();
       r.onload = () => {
-        try {
-          const obj = JSON.parse(r.result);
-          const data = isObj(obj) && isObj(obj.data) && obj.data.v === 2 ? obj.data : isObj(obj) && obj.v === 2 ? obj : null;
-          if (!data) throw new Error('format');
-          if (!confirm('سيستبدل هذا بياناتك الحالية. هل تريد المتابعة؟')) return;
-          S = sanitize(data);
-          save(); applySettings();
-          toast('تم الاستيراد');
-          render();
-        } catch (err) { toast('الملف غير صالح'); }
+        const data = readBackup(r.result);
+        if (data) restoreBackup(data, 'تم الاستيراد'); else toast('الملف غير صالح');
       };
       r.readAsText(f);
       e.target.value = '';
@@ -2406,24 +2825,49 @@
   const ltr = (s, cls = '') => `<span class="ltr ${cls}" lang="en" dir="ltr">${esc(s)}</span>`;
   const biBlock = o => `<div class="stack" style="gap:2px">${ltr(o.en)}<span class="gloss small" dir="rtl" lang="ar">${rich(o.ar)}</span></div>`;
 
+  const trainerOpen = () => !P.meta.trainerCode || S.trainer.unlocked === true;
+  function viewTrainerCode() {
+    setBar('للمدربين', 'Trainers and program team');
+    view.innerHTML = `
+      <div class="stack-lg">
+        <div class="card stack">
+          <div class="row"><span class="unit-badge">${icon('lock')}</span><h2 class="grow" style="margin:0;font-size:1.05rem">صفحات المدربين</h2></div>
+          <p class="small">فيها مواقف التقييم الختامي، لذلك تُفتح برمز يعطيه فريق البرنامج للمدربين.</p>
+          <label class="field">رمز المدرب<input class="input num" id="tCode" inputmode="numeric" autocomplete="off" dir="ltr"></label>
+          <button class="btn" type="button" data-act="unlock">فتح</button>
+        </div>
+        <a class="btn ghost block" href="#/">الرجوع إلى الرئيسية</a>
+      </div>`;
+    const tryCode = () => {
+      if ($('#tCode').value.trim() === String(P.meta.trainerCode)) { S.trainer.unlocked = true; save(); render(); }
+      else { toast('الرمز غير صحيح'); $('#tCode').select(); }
+    };
+    $('[data-act="unlock"]').addEventListener('click', tryCode);
+    $('#tCode').addEventListener('keydown', e => { if (e.key === 'Enter') tryCode(); });
+  }
+
   function viewTrainer() {
     setBar('للمدربين', 'Trainers and program team');
-    const tile = (href, ic, title, sub) => `
+    // Arabic title, then the English one on its own line (mixed on one line, they wrap badly).
+    const tile = (href, ic, ar, en, sub) => `
       <a class="card unit-card" href="${href}">
         <span class="unit-badge">${icon(ic)}</span>
-        <span class="grow"><strong>${title}</strong><br><span class="muted small">${sub}</span></span>
+        <span class="grow"><strong>${ar}</strong><br><bdi class="en small muted" lang="en">${en}</bdi><br><span class="muted small">${sub}</span></span>
         <span class="chev">${icon('next')}</span>
       </a>`;
     view.innerHTML = `
       <div class="stack">
-        ${tile('#/trainer/design', 'book', 'تصميم البرنامج · Program design', 'البيئة، الاحتياجات، المبادئ، المخرجات، المنهج، التقييم، التقويم')}
-        ${tile('#/trainer/matrix', 'grid', 'مصفوفة المواءمة · Alignment matrix', 'كل مخرج ومهمة تقيسه، وكل مهمة ومخرج تقيسه')}
-        ${tile('#/trainer/guide/' + UNITS[0].id, 'users', 'أدلة الورش · Workshop guides', 'خطة ساعتين لكل وحدة وفق دورة التعليم والتعلّم')}
-        ${tile('#/trainer/cards', 'cards', 'بطاقات لعب الأدوار · Role-play cards', 'التشخيصي والختامي، مع سلم التقدير')}
-        ${tile('#/trainer/rate', 'pen', 'تقييم لعب الأدوار · Rate a role-play', 'مقيّمان، أربعة معايير، وحساب الاتفاق')}
-        ${tile('#/trainer/ratings', 'chart', 'النتائج والاتفاق · Ratings and agreement', `${S.trainer.ratings.length} تقييم محفوظ على هذا الجهاز`)}
-        ${tile('#/trainer/align', 'clipboard', 'فحص المواءمة · Alignment check', 'مراجعان يربطان التقييم الختامي بالمخرجات قبل التجربة')}
+        ${tile('#/trainer/design', 'book', 'تصميم البرنامج', 'Program design', 'البيئة، الاحتياجات، المبادئ، المخرجات، المنهج، التقييم، التقويم')}
+        ${tile('#/trainer/matrix', 'grid', 'مصفوفة المواءمة', 'Alignment matrix', 'كل مخرج ومهمة تقيسه، وكل مهمة ومخرج تقيسه')}
+        ${tile('#/trainer/guide/' + UNITS[0].id, 'users', 'أدلة الورش', 'Workshop guides', 'خطة ساعتين لكل وحدة وفق دورة التعليم والتعلّم')}
+        ${tile('#/trainer/cards', 'cards', 'بطاقات لعب الأدوار', 'Role-play cards', 'التشخيصي والختامي، مع سلم التقدير')}
+        ${tile('#/trainer/rate', 'pen', 'تقييم لعب الأدوار', 'Rate a role-play', 'مقيّمان، أربعة معايير، وحساب الاتفاق')}
+        ${tile('#/trainer/ratings', 'chart', 'النتائج والاتفاق', 'Ratings and agreement', `التقييمات المحفوظة على هذا الجهاز: ${S.trainer.ratings.length}`)}
+        ${tile('#/trainer/align', 'clipboard', 'فحص المواءمة', 'Alignment check', 'مراجعان يربطان التقييم الختامي بالمخرجات قبل التجربة')}
+        ${P.meta.trainerCode ? `<button class="btn ghost block" type="button" data-act="lock">${icon('lock')} أغلق صفحات المدربين على هذا الجهاز</button>` : ''}
       </div>`;
+    const lock = $('[data-act="lock"]');
+    if (lock) lock.addEventListener('click', () => { S.trainer.unlocked = false; save(); go('#/settings'); });
   }
 
   function viewDesign() {
@@ -2445,7 +2889,7 @@
 
         <details class="acc" open><summary>Approach · المنهج <span class="chev">${icon('down')}</span></summary>
           <div class="acc-body">${biBlock(D.approach)}
-            <div class="table-scroll"><table class="plain">
+            ${scrollBox('App steps by cycle and strand')}<table class="plain">
               <thead><tr><th>App step</th><th>Teaching-learning cycle</th><th>Strand (Nation)</th></tr></thead>
               <tbody>${STEPS.map((s, i) => `<tr><td>${i + 1}. ${ltr(s.en)}</td><td>${ltr(CYCLE[s.cycle].en)}</td><td>${ltr(STRAND[s.strand].en)}</td></tr>`).join('')}</tbody>
             </table></div>
@@ -2464,7 +2908,7 @@
             </div>`).join('')}</div></details>
 
         <details class="acc"><summary>Syllabus · الخطة الدراسية <span class="chev">${icon('down')}</span></summary>
-          <div class="acc-body"><div class="table-scroll"><table class="plain">
+          <div class="acc-body">${scrollBox('Syllabus')}<table class="plain">
             <thead><tr><th>Week</th><th>Unit</th><th>Genre stages</th><th>PLOs</th><th>Hours</th></tr></thead>
             <tbody>${UNITS.map((u, i) => `<tr><td class="num">${u.week}</td><td>${ltr(`${i + 1}. ${u.title.en}`)}<br><span class="gloss small" dir="rtl" lang="ar">${esc(u.title.ar)}</span></td>
               <td>${ltr(uniq(u.model.lines.map(l => l.st)).map(id => (u.stages.find(s => s.id === id) || {}).en).join(' → '), 'small')}</td>
@@ -2482,7 +2926,7 @@
             <a class="btn soft small" href="#/trainer/cards">Rubric and role-play cards</a></div></details>
 
         <details class="acc"><summary>Evaluation plan · خطة التقويم <span class="chev">${icon('down')}</span></summary>
-          <div class="acc-body"><div class="table-scroll"><table class="plain">
+          <div class="acc-body">${scrollBox('Evaluation plan')}<table class="plain">
             <thead><tr><th>Who</th><th>With what</th><th>When</th></tr></thead>
             <tbody>${P.evaluation.map(e => `<tr><td>${ltr(e.who.en)}</td><td>${ltr(e.what.en)}<br><span class="gloss small" dir="rtl" lang="ar">${esc(e.what.ar)}</span></td><td>${ltr(e.when.en)}</td></tr>`).join('')}</tbody>
           </table></div></div></details>
@@ -2503,7 +2947,7 @@
     view.innerHTML = `
       <div class="stack-lg">
         <p class="small ltr" lang="en">Each program learning outcome is written with the task that assesses it. Read across a row to see how an outcome is assessed; read down a column to see what a task tests.</p>
-        <div class="card"><div class="table-scroll"><table class="plain matrix">
+        <div class="card">${scrollBox('Alignment matrix')}<table class="plain matrix">
           <thead><tr><th>PLO</th>${A.map(a => `<th title="${esc(a.en)}">${esc(a.id)}</th>`).join('')}</tr></thead>
           <tbody>${P.outcomes.map(o => `<tr><th title="${esc(o.en)}">${esc(o.id)}<br><span class="muted small">${esc(o.short.en)}</span></th>${A.map(a => `<td>${cell(a, o)}</td>`).join('')}</tr>`).join('')}</tbody>
         </table></div>
@@ -2511,23 +2955,23 @@
         <p class="small muted ltr" lang="en">● summative (decides whether the outcome is met) · ○ diagnostic or formative</p></div>
 
         <div class="card stack">
-          <h3 class="ltr" lang="en">Alignment checks</h3>
+          <h2 class="h-card ltr" lang="en">Alignment checks</h2>
           ${feedback(!noSummative.length, noSummative.length ? `Outcomes with no summative task: ${noSummative.map(o => o.id).join(', ')}` : 'Every outcome has at least one summative task.')}
           ${feedback(!noOutcome.length, noOutcome.length ? `Tasks that test no outcome: ${noOutcome.map(a => a.id).join(', ')}` : 'Every task tests at least one outcome.')}
           ${feedback(true, 'Spoken outcomes are certified by performance: exit role-plays, two raters, the diagnostic’s four criteria.')}
         </div>
 
         <div class="card stack">
-          <h3 class="ltr" lang="en">Where each outcome is practised</h3>
-          <div class="table-scroll"><table class="plain matrix">
+          <h2 class="h-card ltr" lang="en">Where each outcome is practised</h2>
+          ${scrollBox('Where each outcome is practised')}<table class="plain matrix">
             <thead><tr><th>PLO</th>${UNITS.map((u, i) => `<th title="${esc(u.title.en)}">U${i + 1}</th>`).join('')}</tr></thead>
             <tbody>${P.outcomes.map(o => `<tr><th>${esc(o.id)}</th>${UNITS.map(u => `<td>${u.plos.includes(o.id) ? '<span class="dot full">●</span>' : ''}</td>`).join('')}</tr>`).join('')}</tbody>
           </table></div>
         </div>
 
         <div class="card stack">
-          <h3 class="ltr" lang="en">Listening check (exit form): item to outcome</h3>
-          <div class="table-scroll"><table class="plain">
+          <h2 class="h-card ltr" lang="en">Listening check (exit form): item to outcome</h2>
+          ${scrollBox('Listening check items')}<table class="plain">
             <thead><tr><th>#</th><th>Item</th><th>PLO</th></tr></thead>
             <tbody>${lcItems.map((it, i) => `<tr><td class="num">${i + 1}</td><td>${ltr(it.t === 'price' ? `Type the price: ${fmtPrice(it.amount)} (${priceWords(it.amount)})` : it.en, 'small')}</td><td>${esc(it.plo)}</td></tr>`).join('')}</tbody>
           </table></div>
@@ -2548,11 +2992,11 @@
           <a class="btn soft small" href="#/dialogue/${u}/model">${icon('play')} Model conversation</a>` },
       { min: 25, t: CYCLE.joint, body: biBlock(unit.workshop.joint) },
       { min: 35, t: CYCLE.independent, body: `${biBlock(unit.workshop.pairs)}${biBlock({ en: 'Peer feedback with the four role-play criteria, in simple words.', ar: 'تغذية راجعة بين الزملاء بالمعايير الأربعة بلغة بسيطة.' })}` },
-      { min: 20, t: { en: 'Review and mission', ar: 'المراجعة والمهمة' }, body: `${biBlock({ en: 'Review last week\'s mission logs and app progress. Set this week\'s mission:', ar: 'راجع سجلات مهمة الأسبوع الماضي وتقدم التطبيق. ثم حدد مهمة هذا الأسبوع:' })}${biBlock(unit.mission)}` }
+      { min: 20, t: { en: 'Review and mission', ar: 'المراجعة والمهمة' }, body: `${biBlock({ en: 'Review last week\'s mission logs and app progress. Set this week\'s mission:', ar: 'راجع سجلات مهمة الأسبوع الماضي وتقدم التطبيق. ثم حدد مهمة هذا الأسبوع:' })}${biBlock(unit.mission)}${(unit.mission.items || []).length ? `<ul class="ltr small" lang="en" style="margin:0;padding-left:1.4em">${unit.mission.items.map(x => `<li>${esc(x.en)}</li>`).join('')}</ul>` : ''}` }
     ];
     view.innerHTML = `
       <div class="stack-lg">
-        <div class="row wrap">${UNITS.map((x, n) => `<a class="pill ${x.id === u ? 'brand' : ''}" href="#/trainer/guide/${x.id}">U${n + 1}</a>`).join('')}</div>
+        <div class="row wrap">${UNITS.map((x, n) => `<a class="pill nav-pill ${x.id === u ? 'brand' : ''}" href="#/trainer/guide/${x.id}" ${x.id === u ? 'aria-current="page"' : ''}>U${n + 1}</a>`).join('')}</div>
         <section class="hero stack">
           <p class="small">Week ${unit.week} · 120 minutes</p>
           <h2 class="ltr" lang="en">${esc(unit.title.en)}</h2>
@@ -2573,7 +3017,7 @@
 
   function rubricTable() {
     const R = P.rubric;
-    return `<div class="table-scroll"><table class="plain rubric">
+    return `${scrollBox('Rubric')}<table class="plain rubric">
       <thead><tr><th>Criterion</th>${R.scale.map(v => `<th class="num">${v}<br><span class="muted small">${esc(R.scaleLabels[v].en)}</span></th>`).join('')}</tr></thead>
       <tbody>${R.criteria.map(c => `<tr><th>${ltr(c.en)}<br><span class="gloss small" dir="rtl" lang="ar">${esc(c.ar)}</span></th>${R.scale.map(v => `<td class="small">${ltr(c.d[v].en)}<br><span class="gloss" dir="rtl" lang="ar">${esc(c.d[v].ar)}</span></td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>
@@ -2595,12 +3039,12 @@
             <p class="small"><strong>Setting:</strong> ${ltr(c.setting.en)}</p>
             <div class="note brand small"><strong>Learner task:</strong> ${ltr(c.learner.en)}<br><span dir="rtl" lang="ar">${esc(c.learner.ar)}</span></div>
             <p class="small"><strong>Interlocutor (plays the customer):</strong></p>
-            <ol class="ltr small" lang="en" style="margin:0;padding-left:1.4em">${c.prompts.map(p => `<li>${esc(p)} <button class="audio-btn" type="button" data-say="${esc(p)}" data-role="c" style="min-height:28px;padding:2px 8px">${icon('volume')}</button></li>`).join('')}</ol>
+            <ol class="ltr small prompt-lines" lang="en" style="margin:0;padding-left:1.4em">${c.prompts.map(p => `<li><div class="row"><span>${esc(p)}</span><button class="audio-btn icon-only" type="button" data-say="${esc(p)}" data-role="c" aria-label="Play this line">${icon('volume')}</button></div></li>`).join('')}</ol>
             <p class="small"><strong>What raters look for:</strong></p>
             <ul class="plain-list small">${c.look.map(l => `<li><span class="pill brand">${esc(l.plo)}</span> ${ltr(l.en)} <span class="gloss" dir="rtl" lang="ar">— ${esc(l.ar)}</span></li>`).join('')}</ul>
           </div>`;
         }).join('')}
-        <div class="card stack"><h3 class="ltr" lang="en">Rubric (four criteria)</h3>${rubricTable()}</div>
+        <div class="card stack"><h2 class="h-card ltr" lang="en">Rubric (four criteria)</h2>${rubricTable()}</div>
         <a class="btn block" href="#/trainer/rate">${icon('pen')} Rate a role-play</a>
       </div>`;
   }
@@ -2679,7 +3123,7 @@
         <div class="stack-lg">
           <div class="card stack">
             <strong>${esc(rec.learner)} · ${esc(rec.task)}: ${ltr(ASSESS[rec.task].en)}</strong>
-            <div class="table-scroll"><table class="plain">
+            ${scrollBox('Rating by criterion')}<table class="plain">
               <thead><tr><th>Criterion</th><th>R1</th><th>R2</th><th>Mean</th><th>Gap</th></tr></thead>
               <tbody>${res.per.map(x => `<tr><td>${ltr(P.rubric.criteria.find(c => c.id === x.id).en)}</td><td class="num">${x.a}</td><td class="num">${x.b}</td><td class="num">${x.mean.toFixed(1)}</td>
                 <td class="num">${x.gap > P.rubric.maxGap ? `<span class="pill bad">${x.gap}</span>` : x.gap}</td></tr>`).join('')}
@@ -2731,15 +3175,15 @@
         </div>
         <p class="small muted ltr" lang="en">Agreement is computed per criterion across ${results.length} double-rated role-play${results.length === 1 ? '' : 's'} (${n} criterion ratings).</p>
         <div class="card stack">
-          <h3 class="ltr" lang="en">Diagnostic → exit, per learner (mean total of two raters, out of ${P.rubric.criteria.length * 4})</h3>
-          <div class="table-scroll"><table class="plain">
+          <h2 class="h-card ltr" lang="en">Diagnostic → exit, per learner (mean total of two raters, out of ${P.rubric.criteria.length * 4})</h2>
+          ${scrollBox('Diagnostic and exit per learner')}<table class="plain">
             <thead><tr><th>Learner</th><th>DX</th><th>Exit mean</th><th>Exit met</th></tr></thead>
             <tbody>${growth.map(g => `<tr><td>${esc(g.name)}</td><td class="num">${g.dx != null ? g.dx.toFixed(1) : '—'}</td><td class="num">${g.exit != null ? g.exit.toFixed(1) : '—'}</td><td class="num">${g.met}</td></tr>`).join('')}</tbody>
           </table></div>
         </div>
         <div class="card stack">
-          <h3 class="ltr" lang="en">All ratings</h3>
-          <div class="table-scroll"><table class="plain">
+          <h2 class="h-card ltr" lang="en">All ratings</h2>
+          ${scrollBox('All ratings')}<table class="plain">
             <thead><tr><th>Learner</th><th>Task</th><th>R1</th><th>R2</th><th>Mean</th><th></th><th></th></tr></thead>
             <tbody>${results.map(({ r, res }) => `<tr>
               <td>${esc(r.learner)}<br><span class="muted small">${fmtDateEn(r.at)}</span></td><td>${esc(r.task)}</td>
@@ -2838,13 +3282,13 @@
           </div>
           <p class="small muted ltr" lang="en">${cells.length} task-by-outcome decisions (${tasks.length} exit tasks × ${P.outcomes.length} outcomes). Reviewer A: ${esc(al.A.name || '—')}; Reviewer B: ${esc(al.B.name || '—')}.</p>
           <div class="card stack">
-            <h3 class="ltr" lang="en">Each reviewer against the design matrix</h3>
+            <h2 class="h-card ltr" lang="en">Each reviewer against the design matrix</h2>
             <table class="plain"><tbody>
               <tr><th>Reviewer A</th><td class="num">${Math.round(ad.po * 100)}% · κ ${fmtK(ad.k)}</td></tr>
               <tr><th>Reviewer B</th><td class="num">${Math.round(bd.po * 100)}% · κ ${fmtK(bd.k)}</td></tr>
             </tbody></table>
           </div>
-          ${dis.length ? `<div class="card stack"><h3 class="ltr" lang="en">Where the reviewers differ</h3>
+          ${dis.length ? `<div class="card stack"><h2 class="h-card ltr" lang="en">Where the reviewers differ</h2>
             <ul class="plain-list small">${dis.map(c => `<li>${ltr(`${c.t} × ${c.o}: A ${(al.A.map[c.t] || []).includes(c.o) ? 'yes' : 'no'}, B ${(al.B.map[c.t] || []).includes(c.o) ? 'yes' : 'no'}; design ${ASSESS[c.t].plos.includes(c.o) ? 'yes' : 'no'}`)}</li>`).join('')}</ul></div>` : feedback(true, 'The reviewers agree on every cell.')}
           <p class="small muted ltr" lang="en">Report this agreement before the pilot. If a task is changed, change only the alignment, using equated tasks and a second rater.</p>
           <button class="btn ghost block" type="button" data-act="reset">Start a new check</button>
@@ -2868,6 +3312,7 @@
     $('#helpBtn').addEventListener('click', openHelp);
     applySettings();
     if (!S.profile.startedAt) { S.profile.startedAt = dayKey(); save(); }
+    if (hasProgress()) keepStorage();
     window.addEventListener('hashchange', render);
     render();
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

@@ -21,6 +21,8 @@
   --bad-soft: #fbe8e6;
   --violet: #5b3fa6;
   --violet-soft: #eeeaf9;
+  --track: #dcd8cc;    /* progress bar tracks */
+  --seg-todo: #8e8a80; /* outline of steps not done yet: 3:1 against the page */
   --shadow: 0 1px 2px rgba(24, 32, 29, .06), 0 6px 18px rgba(24, 32, 29, .06);
   --radius: 14px;
   --radius-lg: 20px;
@@ -53,6 +55,8 @@
     --bad-soft: #3a1b18;
     --violet: #b5a2ef;
     --violet-soft: #2a2340;
+    --track: #2f3a36;
+    --seg-todo: #6b7570;
     --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
     color-scheme: dark;
   }
@@ -78,12 +82,19 @@
   --bad-soft: #3a1b18;
   --violet: #b5a2ef;
   --violet-soft: #2a2340;
+  --track: #2f3a36;
+  --seg-todo: #6b7570;
   --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
   color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Keep focused and scrolled-to elements clear of the sticky app bar and the fixed tab bar. */
+  scroll-padding-top: calc(var(--bar-h) + env(safe-area-inset-top, 0px) + 8px);
+  scroll-padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 8px);
+}
 body {
   margin: 0;
   background: var(--bg);
@@ -125,7 +136,7 @@ img, svg { display: block; }
 .app-bar .t1, .app-bar .t2 {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
-.app-bar .t1 { font-weight: 700; font-size: 1.02rem; line-height: 1.25; }
+.app-bar .t1 { margin: 0; font-weight: 700; font-size: 1.02rem; line-height: 1.25; }
 .app-bar .t2 { font-size: .82rem; line-height: 1.3; color: rgba(255, 255, 255, .88); }
 .icon-btn {
   width: 44px; height: 44px; flex: none;
@@ -133,16 +144,19 @@ img, svg { display: block; }
   border: 0; border-radius: 12px;
   background: rgba(255, 255, 255, .12); color: #fff;
 }
-.icon-btn:hover { background: rgba(255, 255, 255, .2); }
+@media (hover: hover) { .icon-btn:hover { background: rgba(255, 255, 255, .2); } }
 .icon-btn svg { width: 22px; height: 22px; }
 .icon-btn.sos { background: #c2412d; }
 a.icon-btn { text-decoration: none; }
-.icon-btn.sos:hover { background: #d4513b; }
+@media (hover: hover) { .icon-btn.sos:hover { background: #d4513b; } }
 
 main#view {
   max-width: 600px; margin: 0 auto;
   padding: 16px 16px calc(var(--nav-h) + 28px + env(safe-area-inset-bottom, 0px));
 }
+/* The app moves focus to the main region after each navigation for screen readers;
+   it is not a control, so it needs no focus ring. */
+main#view:focus { outline: none; }
 
 .tab-bar {
   position: fixed; inset-inline: 0; bottom: 0; z-index: 20;
@@ -156,11 +170,12 @@ main#view {
   flex: 1; min-width: 0; height: var(--nav-h);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   text-decoration: none; color: var(--ink-3);
-  font-size: .78rem; font-weight: 600; line-height: 1.2; text-align: center;
+  font-size: .8125rem; font-weight: 600; line-height: 1.2; text-align: center;
   border: 0; background: none; padding: 0 2px;
 }
 .tab-bar a svg, .tab-bar button svg { width: 24px; height: 24px; flex: none; }
 .tab-bar .help-tab svg { color: #c2412d; }
+.tab-bar .help-tab { flex: 1.3; } /* its two-word label stays on one line at 13 px */
 .tab-bar a[aria-current="page"] { color: var(--brand); }
 
 /* ---------- Generic blocks ---------- */
@@ -182,7 +197,7 @@ main#view {
 .card.tight { padding: 12px 14px; }
 a.card, button.card { display: block; width: 100%; text-align: start; text-decoration: none; color: inherit; font: inherit; }
 a.card.unit-card, button.card.unit-card, a.card.row, button.card.row { display: flex; }
-a.card:hover, button.card:hover { border-color: var(--brand); }
+@media (hover: hover) { a.card:hover, button.card:hover { border-color: var(--brand); } }
 fieldset { margin: 0; min-width: 0; }
 a.sr-only:focus {
   position: fixed; top: 8px; inset-inline-start: 8px; z-index: 100;
@@ -207,7 +222,7 @@ h2.section {
   display: flex; align-items: baseline; gap: 8px;
 }
 h2.section .en { font-size: .8rem; font-weight: 500; color: var(--ink-3); }
-h3 { margin: 0; font-size: 1rem; line-height: 1.4; }
+h3, h2.h-card { margin: 0; font-size: 1rem; line-height: 1.4; } /* card titles: h2 under the screen's h1 */
 p { margin: 0; }
 
 .pill {
@@ -237,15 +252,15 @@ button.pill { border: 0; cursor: pointer; font: inherit; }
   transition: transform .08s ease, background .15s ease;
 }
 .btn:active { transform: scale(.98); }
-.btn:hover { background: var(--brand-strong); }
+@media (hover: hover) { .btn:hover { background: var(--brand-strong); } }
 .btn svg { width: 20px; height: 20px; flex: none; }
 .btn.block { width: 100%; }
 .btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
-.btn.ghost:hover { border-color: var(--brand); background: var(--surface); }
+@media (hover: hover) { .btn.ghost:hover { border-color: var(--brand); background: var(--surface); } }
 .btn.soft { background: var(--brand-soft); color: var(--brand-strong); }
 :root[data-theme="dark"] .btn.soft { color: var(--brand); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.soft { color: var(--brand); } }
-.btn.soft:hover { background: var(--brand-soft); border-color: var(--brand); }
+@media (hover: hover) { .btn.soft:hover { background: var(--brand-soft); border-color: var(--brand); } }
 .btn.danger { background: var(--bad); color: #fff; }
 .btn.small { min-height: 44px; padding: 6px 12px; font-size: .88rem; border-radius: 10px; }
 .btn[disabled] { opacity: .5; pointer-events: none; }
@@ -263,7 +278,7 @@ button.pill { border: 0; cursor: pointer; font: inherit; }
 .audio-btn.playing { background: var(--brand); color: var(--brand-ink); }
 
 .progress {
-  height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden;
+  height: 8px; border-radius: 999px; background: var(--track); overflow: hidden;
 }
 .progress > span { display: block; height: 100%; background: var(--brand); border-radius: inherit; transition: width .4s ease; }
 .hero .progress { background: rgba(255, 255, 255, .2); }
@@ -330,7 +345,7 @@ mark { background: var(--amber-soft); color: var(--amber); border-radius: 4px; p
   background: var(--surface); border: 1px solid var(--line);
   text-decoration: none; color: inherit;
 }
-.step:hover { border-color: var(--brand); }
+@media (hover: hover) { .step:hover { border-color: var(--brand); } }
 .step .ico {
   width: 40px; height: 40px; flex: none; border-radius: 10px;
   display: grid; place-items: center;
@@ -346,16 +361,17 @@ mark { background: var(--amber-soft); color: var(--amber); border-radius: 4px; p
 .activity-head .progress { flex: 1; }
 .counter { font-size: .85rem; color: var(--ink-3); white-space: nowrap; direction: ltr; unicode-bidi: isolate; }
 
-.prompt-card { text-align: center; padding: 24px 16px; }
+.prompt-card { text-align: center; padding: 16px; }
 .prompt-card .say { text-align: center; }
+.prompt-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; }
 .big-play {
-  width: 84px; height: 84px; margin: 6px auto 10px;
+  width: 72px; height: 72px; margin: 2px auto 4px;
   border-radius: 50%; border: 0;
   background: var(--brand); color: var(--brand-ink);
   display: grid; place-items: center;
   box-shadow: 0 6px 18px rgba(15, 110, 102, .35);
 }
-.big-play svg { width: 38px; height: 38px; }
+.big-play svg { width: 34px; height: 34px; }
 .big-play.playing { animation: pulse 1s ease-in-out infinite; }
 .big-play[disabled] { opacity: .4; cursor: default; }
 .shake { animation: shake .35s ease; }
@@ -365,12 +381,12 @@ mark { background: var(--amber-soft); color: var(--amber); border-radius: 4px; p
 .options { display: flex; flex-direction: column; gap: 10px; }
 .option {
   width: 100%; text-align: start;
-  padding: 14px 16px; min-height: 54px;
+  padding: 12px 16px; min-height: 50px;
   border-radius: 12px; border: 1.5px solid var(--line);
   background: var(--surface);
   display: flex; align-items: center; gap: 10px;
 }
-.option:hover { border-color: var(--brand); }
+@media (hover: hover) { .option:hover { border-color: var(--brand); } }
 .option .say { font-size: 1rem; flex: 1; }
 .option.center { justify-content: center; }
 .option.correct { border-color: var(--good); background: var(--good-soft); }
@@ -419,7 +435,7 @@ mark { background: var(--amber-soft); color: var(--amber); border-radius: 4px; p
   background: var(--surface); border: 1px solid var(--line);
   font: inherit; color: inherit; text-align: start; cursor: pointer;
 }
-.bubble:hover { border-color: var(--brand); }
+@media (hover: hover) { .bubble:hover { border-color: var(--brand); } }
 .stage-chip {
   align-self: center; margin-top: 4px;
   font-size: .82rem; font-weight: 600; color: var(--ink-2);
@@ -526,7 +542,7 @@ textarea.input { min-height: 96px; resize: vertical; }
   border: 1px solid var(--line); background: var(--surface);
   text-align: start;
 }
-.phrase-btn:hover { border-color: var(--brand); }
+@media (hover: hover) { .phrase-btn:hover { border-color: var(--brand); } }
 .phrase-btn .play {
   width: 36px; height: 36px; border-radius: 50%; flex: none;
   display: grid; place-items: center; background: var(--brand); color: var(--brand-ink);
@@ -590,13 +606,15 @@ table.rubric td, table.rubric th { min-width: 7rem; }
 
 /* ---------- Learner flow additions ---------- */
 .inline-ico { display: inline-block; width: 18px; height: 18px; vertical-align: -3px; }
-.hero .btn.hero-btn { background: #fff; color: var(--brand-strong); align-self: stretch; }
-.hero .btn.hero-btn:hover { background: #f0f7f6; }
+.hero .btn.hero-btn { background: #fff; color: #0a4f49; align-self: stretch; } /* the hero stays teal in dark mode too */
+@media (hover: hover) { .hero .btn.hero-btn:hover { background: #f0f7f6; } }
 .step.current { border-color: var(--brand); border-width: 2px; }
-.step-progress { display: flex; gap: 4px; }
-.step-progress span { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2); }
-.step-progress span.past { background: var(--brand-soft); }
-.step-progress span.now { background: var(--brand); }
+/* Step strip: done = filled, not yet = outlined, current = taller. */
+.step-progress { display: flex; align-items: center; gap: 5px; min-height: 12px; }
+.step-progress span { flex: 1; height: 8px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--seg-todo); }
+.step-progress span.done { background: var(--brand); box-shadow: none; }
+.step-progress span.now { height: 12px; box-shadow: inset 0 0 0 2.5px var(--brand-strong); }
+.step-progress span.now.done { background: var(--brand-strong); box-shadow: none; }
 .order-list { margin: 0; padding-inline-start: 1.4em; display: flex; flex-direction: column; gap: 8px; }
 .order-list:empty { display: none; }
 .order-list li { padding: 8px 12px; border-radius: 12px; background: var(--good-soft); }
@@ -635,3 +653,60 @@ table.rubric td, table.rubric th { min-width: 7rem; }
 .voice-warn { display: flex; flex-direction: column; gap: 10px; }
 .voice-warn p { margin: 0; }
 .voice-warn ol { margin: 4px 0 0; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 4px; }
+
+/* An activity's main buttons stay in reach just above the tab bar while the page scrolls. */
+.action-bar {
+  position: sticky; z-index: 5;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  margin-inline: -16px; padding: 12px 16px 10px;
+  background: linear-gradient(to bottom, transparent, var(--bg) 12px);
+}
+.action-bar:empty { display: none; }
+.action-bar > * + * { margin-top: 10px; }
+.steps-list { margin: 0; padding-inline-start: 22px; display: flex; flex-direction: column; gap: 6px; }
+.steps-list .btn { vertical-align: middle; }
+.link-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 12px;
+  color: var(--ink-3); font-size: .85rem; text-decoration: underline; text-underline-offset: 3px;
+}
+
+/* Lessons (unit steps): no tab bar, so the activity gets the whole screen. */
+html.lesson { scroll-padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); }
+html.lesson .tab-bar { display: none; }
+html.lesson main#view { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+html.lesson .action-bar { bottom: 0; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+html.lesson .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+
+/* Home: the learner's name, asked once in the welcome card. */
+.hero-name { display: flex; gap: 8px; align-items: stretch; }
+.hero-name .input { flex: 1; min-width: 0; background: #fff; color: #18201d; border-color: transparent; }
+.hero-name .input::placeholder { color: #5f6863; }
+.btn.on-hero { flex: none; background: transparent; color: #fff; border-color: rgba(255, 255, 255, .75); }
+@media (hover: hover) { .btn.on-hero:hover { background: rgba(255, 255, 255, .12); } }
+.hero .hero-sub { margin-top: -4px; color: rgba(255, 255, 255, .88); }
+.hero .stat.met .v { color: #fff; }
+
+/* Quick phrases: each phrase can be shown to a customer in large type. */
+.phrase-row { display: flex; gap: 8px; align-items: stretch; }
+.phrase-row .phrase-btn { flex: 1; min-width: 0; }
+.show-btn {
+  flex: none; width: 52px; min-height: 44px; border-radius: 12px;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); background: var(--surface); color: var(--brand-strong);
+}
+.show-btn svg { width: 22px; height: 22px; }
+.big-phrase {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 32px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); color: var(--ink);
+  animation: rise .2s ease;
+}
+.big-phrase .say { margin: 0; max-width: 20ch; text-align: center; font-size: clamp(2rem, 9vw, 3.5rem); line-height: 1.25; }
+
+/* Icon-only play buttons still get a 44 px target. */
+.audio-btn.icon-only { min-width: 44px; justify-content: center; padding: 8px; }
+.prompt-lines li > .row { justify-content: space-between; }
+
+/* The workshop guide's unit switcher: pills with a full touch target. */
+.pill.nav-pill { min-width: 44px; min-height: 44px; justify-content: center; }

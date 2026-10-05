@@ -23,7 +23,7 @@
 window.PROGRAM = {
   meta: {
     id: "retail-english",
-    version: "2.2.0",
+    version: "2.4.0",
     title: { en: "Retail English" },
     subtitle: {
       en: "English for retail sales associates",
@@ -42,7 +42,12 @@ window.PROGRAM = {
       { hours: 1, en: "On-the-job mission with real customers", ar: "مهمة في مكان العمل مع عملاء حقيقيين" }
     ],
     mode: { en: "Blended", ar: "مدمج" },
-    passMark: 80 // unit checks, percent
+    dailyMinutes: 20, // the daily app goal shown on Home
+    passMark: 80, // unit checks, percent
+    // Opens the trainer area (Settings › للمدربين), which holds the exit role-plays.
+    // Give it to trainers only. It keeps learners from browsing the assessment pages,
+    // but it is not a password: anyone who reads this file can see it.
+    trainerCode: "7310"
   },
 
   // ---------------------------------------------------------------------------
@@ -406,7 +411,9 @@ window.PROGRAM = {
         en: "Answer “Thank you” with “You're welcome”. “Welcome” alone is for greeting."
       },
       mission: {
-        ar: "رحّب بثلاثة عملاء على الأقل بالإنجليزية واعرض عليهم المساعدة. واستخدم مرة واحدة على الأقل: `Sorry, could you say that again, please?` ثم سجّل ما حدث.",
+        short: "رحّب بثلاثة عملاء بالإنجليزية واعرض عليهم المساعدة.",
+        ar: "رحّب بثلاثة عملاء على الأقل بالإنجليزية واعرض عليهم المساعدة. واستخدم الجملة أدناه مرة واحدة على الأقل، ثم سجّل ما حدث.",
+        items: [{ en: "Sorry, could you say that again, please?", ar: "عذرًا، هل يمكنك إعادة ذلك من فضلك؟" }],
         en: "Greet at least three customers in English and offer help. Use “Sorry, could you say that again, please?” at least once. Note what happened."
       },
       workshop: {
@@ -502,7 +509,13 @@ window.PROGRAM = {
         en: "“Aisle” sounds like “I'll”. Ground floor is the street level; first floor is the one above."
       },
       mission: {
-        ar: "ساعد ثلاثة عملاء على إيجاد منتجات بالإنجليزية. استخدم: `It's in aisle…` أو `Let me show you` أو `Let me check`. واكتب أسماء أقسام متجرك بالإنجليزية.",
+        short: "ساعد ثلاثة عملاء على إيجاد منتجات بالإنجليزية.",
+        ar: "ساعد ثلاثة عملاء على إيجاد منتجات بالإنجليزية، واستخدم العبارات أدناه. واكتب أسماء أقسام متجرك بالإنجليزية.",
+        items: [
+          { en: "It's in aisle seven.", ar: "في الممر السابع." },
+          { en: "Let me show you.", ar: "دعني أريك." },
+          { en: "Let me check.", ar: "دعني أتحقق." }
+        ],
         en: "Help three customers find products in English. Use “It's in aisle…”, “Let me show you” or “Let me check”. List your store's sections in English."
       },
       workshop: {
@@ -596,6 +609,7 @@ window.PROGRAM = {
         en: "“On sale” means discounted; “for sale” means available to buy."
       },
       mission: {
+        short: "صِف ثلاثة منتجات من قسمك بالإنجليزية، ثم صِف واحدًا لعميل.",
         ar: "اختر ثلاثة منتجات من قسمك وتدرّب على وصفها بالإنجليزية (المقاس أو اللون والسعر والعرض إن وجد). ثم استخدم وصفًا واحدًا على الأقل مع عميل حقيقي.",
         en: "Choose three products in your section and practise describing them (size or colour, price, any offer). Use one description with a real customer."
       },
@@ -695,6 +709,7 @@ window.PROGRAM = {
         en: "Teen numbers stress the end (thir-TEEN); tens stress the start (THIR-ty)."
       },
       mission: {
+        short: "قل المجموع بالإنجليزية لخمسة عملاء على الأقل.",
         ar: "قل المجموع بالإنجليزية لخمسة عملاء على الأقل، واطلب التأكيد إذا لم تسمع رقمًا جيدًا. سجّل رقمًا واحدًا كان صعبًا.",
         en: "Say the total in English to at least five customers, and confirm any number you did not hear well. Note one number that was hard."
       },
@@ -787,7 +802,9 @@ window.PROGRAM = {
         en: "Refund = money back. Exchange = a different item. “Cash back” is not a refund."
       },
       mission: {
-        ar: "اعرف سياسة الإرجاع والاستبدال في متجرك واكتبها في ثلاث جمل إنجليزية بسيطة (مثل: `Returns within 7 days with the receipt.`). تدرّب على قولها بصوت عالٍ.",
+        short: "اكتب سياسة الإرجاع في متجرك في ثلاث جمل إنجليزية.",
+        ar: "اعرف سياسة الإرجاع والاستبدال في متجرك، واكتبها في ثلاث جمل إنجليزية بسيطة مثل الجملة أدناه. ثم تدرّب على قولها بصوت عالٍ.",
+        items: [{ en: "Returns within 7 days with the receipt.", ar: "الإرجاع خلال 7 أيام مع الإيصال." }],
         en: "Find your store's return and exchange policy and write it in three simple English sentences (for example, “Returns within 7 days with the receipt.”). Practise saying them."
       },
       workshop: {
@@ -882,6 +899,7 @@ window.PROGRAM = {
         en: "“I'm sorry” shows understanding; it does not mean you made the mistake."
       },
       mission: {
+        short: "لاحظ مشكلة حقيقية مع عميل، واكتب كيف تتعامل معها الآن.",
         ar: "لاحظ مشكلة حقيقية واحدة هذا الأسبوع (سعر، انتظار، منتج تالف). اكتب ما قاله العميل وما قلته أنت، ثم اكتب كيف تقولها بشكل أفضل الآن.",
         en: "Notice one real problem this week (a price, a wait, a damaged item). Write what the customer said and what you said, then how you would say it now."
       },
